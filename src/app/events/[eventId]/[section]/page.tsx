@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createQuestionnaireAction } from "@/app/actions/questionnaires";
 import { createEventKitItemAction, createEventKitItemFromAnswerAction, updateEventKitItemAction } from "@/app/actions/event-kit";
 import { updateAnswerModerationAction } from "@/app/actions/moderation";
 import { clearPublicScreenAction, endLiveSessionAction, showEventKitItemAction, startLiveSessionAction } from "@/app/actions/live";
@@ -15,6 +14,7 @@ import { publicScreenUrl } from "@/lib/questionnaires/tokens";
 import { listQuestionnaires } from "@/lib/questionnaires/data";
 import { AUDIENCE_LABELS } from "@/lib/questionnaires/types";
 import { listEventSubmissions } from "@/lib/responses/data";
+import { QuestionnaireCreateForm } from "../questionnaire-create-form";
 
 const SECTION_COPY: Record<string, { title: string; description: string }> = {
   questionnaires: { title: "Анкети", description: "Customer і guest questionnaires для цієї події." },
@@ -53,11 +53,7 @@ export default async function EventSectionPage({ params, searchParams }: { param
           </div>
           <aside className="create-questionnaire-panel">
             <span className="eyebrow">НОВА АНКЕТА</span><h2>Почати зі структури</h2>
-            <form action={createQuestionnaireAction.bind(null, eventId)} className="editor-form">
-              <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-title">Назва</label><input id="questionnaire-title" name="title" placeholder="Анкета для гостей" required /></div>
-              <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-audience">Для кого</label><select id="questionnaire-audience" name="audience" defaultValue="guest"><option value="customer">Замовники</option><option value="guest">Гості</option><option value="bride">Наречена</option><option value="groom">Наречений</option><option value="couple">Пара</option><option value="other">Інша аудиторія</option></select></div>
-              <button className="button button--brand button--solid" type="submit">Створити анкету</button>
-            </form>
+            <QuestionnaireCreateForm eventId={eventId} />
           </aside>
         </section>
       </AppShell>

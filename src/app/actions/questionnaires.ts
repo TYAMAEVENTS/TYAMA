@@ -49,7 +49,7 @@ const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prom
   ],
 };
 
-export type QuestionnaireActionState = { error?: string };
+export type QuestionnaireActionState = { error?: string; questionnaireId?: string };
 
 function pathFor(eventId: string, questionnaireId?: string) {
   return questionnaireId
@@ -66,41 +66,50 @@ async function hostContext(eventId: string) {
   return { user, accessToken };
 }
 
-export async function createQuestionnaireAction(eventId: string, formData: FormData) {
+export async function createQuestionnaireAction(
+  eventId: string,
+  _: QuestionnaireActionState,
+  formData: FormData,
+): Promise<QuestionnaireActionState> {
   const { user, accessToken } = await hostContext(eventId);
   const audienceValue = String(formData.get("audience") ?? "guest");
   const audience = QUESTIONNAIRE_AUDIENCES.includes(audienceValue as QuestionnaireAudience)
     ? (audienceValue as QuestionnaireAudience)
     : "guest";
   const title = String(formData.get("title") ?? "").trim().slice(0, 160);
-  if (!title) redirect(`${pathFor(eventId)}?error=title`);
+  if (!title) return { error: "Додайте назву анкети." };
 
-  const rows = await supabaseRest<Questionnaire[]>("questionnaires", {
-    method: "POST",
-    accessToken,
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ host_id: user.id, event_id: eventId, audience, title, status: "draft" }),
-  });
-  const questionnaire = rows[0];
-  if (!questionnaire) redirect(`${pathFor(eventId)}?error=create`);
+  try {
+    const rows = await supabaseRest<Questionnaire[]>("questionnaires", {
+      method: "POST",
+      accessToken,
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ host_id: user.id, event_id: eventId, audience, title, status: "draft" }),
+    });
+    const questionnaire = rows[0];
+    if (!questionnaire) return { error: "Анкету не створено. Спробуйте ще раз." };
 
-  const token = questionnaireToken(questionnaire.id);
-  await supabaseRest(`questionnaires?id=eq.${questionnaire.id}&event_id=eq.${eventId}`, {
-    method: "PATCH",
-    accessToken,
-    body: JSON.stringify({ public_token_hash: capabilityHash(token) }),
-  });
+    const token = questionnaireToken(questionnaire.id);
+    await supabaseRest(`questionnaires?id=eq.${questionnaire.id}&event_id=eq.${eventId}`, {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ public_token_hash: capabilityHash(token) }),
+    });
 
-  const starterKey = audience === "guest" || audience === "other" ? "guest" : "customer";
-  const questions = STARTERS[starterKey].map((question, index) => ({
-    ...question,
-    host_id: user.id,
-    event_id: eventId,
-    questionnaire_id: questionnaire.id,
-    sort_order: (index + 1) * 10,
-  }));
-  await supabaseRest("questions", { method: "POST", accessToken, body: JSON.stringify(questions) });
-  redirect(pathFor(eventId, questionnaire.id));
+    const starterKey = audience === "guest" || audience === "other" ? "guest" : "customer";
+    const questions = STARTERS[starterKey].map((question, index) => ({
+      ...question,
+      host_id: user.id,
+      event_id: eventId,
+      questionnaire_id: questionnaire.id,
+      sort_order: (index + 1) * 10,
+    }));
+    await supabaseRest("questions", { method: "POST", accessToken, body: JSON.stringify(questions) });
+    revalidatePath(pathFor(eventId));
+    return { questionnaireId: questionnaire.id };
+  } catch {
+    return { error: "Анкету не створено. Введені дані лишилися у формі — спробуйте ще раз." };
+  }
 }
 
 export async function updateQuestionnaireAction(eventId: string, questionnaireId: string, formData: FormData) {
