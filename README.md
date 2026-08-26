@@ -17,3 +17,9 @@ Closed working Pilot for Свят Галюк. This repository is the active sour
 4. Run `npm run dev`.
 
 Never commit `.env.local`, service/secret keys, passwords, or raw public capability tokens.
+
+## Deployment
+
+- Vercel project: `tyama`
+- Production branch: `main`
+- Git repository: `TYAMAEVENTS/TYAMA`
