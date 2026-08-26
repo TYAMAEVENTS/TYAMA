@@ -105,7 +105,6 @@ export async function createQuestionnaireAction(
       sort_order: (index + 1) * 10,
     }));
     await supabaseRest("questions", { method: "POST", accessToken, body: JSON.stringify(questions) });
-    revalidatePath(pathFor(eventId));
     return { questionnaireId: questionnaire.id };
   } catch {
     return { error: "Анкету не створено. Введені дані лишилися у формі — спробуйте ще раз." };
