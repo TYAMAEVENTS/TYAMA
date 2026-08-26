@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, createHmac } from "node:crypto";
 
 function tokenPepper(): string {
-  const value = process.env.TYAMA_TOKEN_PEPPER ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const value = process.env.TYAMA_TOKEN_PEPPER || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!value || value.length < 32) {
     throw new Error("TYAMA_TOKEN_PEPPER must contain at least 32 characters.");
   }
@@ -21,8 +21,8 @@ export function capabilityHash(value: string): string {
 
 export function publicQuestionnaireUrl(questionnaireId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   return `${baseUrl.replace(/\/$/, "")}/q/${questionnaireToken(questionnaireId)}`;
 }
 
@@ -34,7 +34,7 @@ export function publicScreenToken(eventId: string): string {
 
 export function publicScreenUrl(eventId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   return `${baseUrl.replace(/\/$/, "")}/screen/${publicScreenToken(eventId)}`;
 }
