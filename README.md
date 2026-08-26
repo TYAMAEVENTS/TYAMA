@@ -23,3 +23,4 @@ Never commit `.env.local`, service/secret keys, passwords, or raw public capabil
 - Vercel project: `tyama`
 - Production branch: `main`
 - Git repository: `TYAMAEVENTS/TYAMA`
+- Runtime configuration: Vercel Environment Variables
