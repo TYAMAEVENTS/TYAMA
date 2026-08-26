@@ -17,10 +17,29 @@ import {
 
 const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prompt" | "help_text" | "is_required" | "default_privacy">>> = {
   customer: [
-    { type: "short_text", prompt: "Як до вас звертатися?", help_text: null, is_required: true, default_privacy: "host_only" },
-    { type: "long_text", prompt: "Якою ви бачите атмосферу своєї події?", help_text: "Опишіть настрій своїми словами.", is_required: true, default_privacy: "review_required" },
+    { type: "short_text", prompt: "Як до вас обох звертатися?", help_text: "Імена та бажана форма звертання.", is_required: true, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Опишіть вашу подію трьома словами.", help_text: "Не шукайте правильних слів — важливе ваше відчуття.", is_required: true, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Що гості мають відчути наприкінці вечора?", help_text: null, is_required: true, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Як ви познайомилися?", help_text: "Де, коли і що кожен із вас запам’ятав.", is_required: true, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Яке було перше враження одне про одного?", help_text: "Можна відповісти окремо від кожного.", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Коли ви зрозуміли, що це серйозно?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Розкажіть історію освідчення або рішення одружитися.", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Які риси партнера ви найбільше цінуєте?", help_text: "По кілька рис від кожного.", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Які ваші смішні, милі або дуже впізнавані звички?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Через що ви можете жартома сперечатися?", help_text: "Тільки те, що точно комфортно згадувати публічно.", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Які спільні мрії, плани або пригоди вас об’єднують?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Хто з гостей особливо важливий і чому?", help_text: "Імена, роль у вашому житті та короткий контекст.", is_required: true, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Які сімейні історії або традиції варто згадати?", help_text: null, is_required: false, default_privacy: "review_required" },
     { type: "long_text", prompt: "Які люди, історії або моменти точно мають прозвучати?", help_text: null, is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Яких тем, жартів або згадок потрібно уникати?", help_text: "Цю відповідь бачить лише ведучий.", is_required: false, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Що на вашій події точно не повинно бути шаблонним?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Які інтерактиви вам подобаються, а які — ні?", help_text: "Наприклад: командні, музичні, з історіями, без виходу на сцену.", is_required: false, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Яка музика, фільми, меми або культурні штуки — точно про вас?", help_text: "Це допоможе знайти ваш тон і референси.", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Які фото, відео або аудіо варто попросити у гостей?", help_text: "Самі файли додамо після окремої перевірки media-flow.", is_required: false, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Чи готуються сюрпризи, про які має знати ведучий?", help_text: "Цю відповідь бачить лише ведучий.", is_required: false, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Яких тем, жартів, людей або згадок потрібно уникати?", help_text: "Цю відповідь бачить лише ведучий і вона ніколи не піде на екран автоматично.", is_required: true, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Чи є складні стосунки, втрати або чутливі обставини, які ведучий має врахувати?", help_text: "Можна написати лише стільки, скільки вам комфортно.", is_required: false, default_privacy: "host_only" },
+    { type: "short_text", prompt: "Чиї імена або прізвища важливо правильно вимовити?", help_text: "За потреби додайте наголос у слові.", is_required: false, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Що ще Свят має зрозуміти про вас до першої зустрічі?", help_text: "Будь-який контекст, для якого не знайшлося окремого питання.", is_required: false, default_privacy: "host_only" },
   ],
   guest: [
     { type: "short_text", prompt: "Як вас звати?", help_text: null, is_required: true, default_privacy: "host_only" },
@@ -72,7 +91,7 @@ export async function createQuestionnaireAction(eventId: string, formData: FormD
     body: JSON.stringify({ public_token_hash: capabilityHash(token) }),
   });
 
-  const starterKey = audience === "customer" ? "customer" : "guest";
+  const starterKey = audience === "guest" || audience === "other" ? "guest" : "customer";
   const questions = STARTERS[starterKey].map((question, index) => ({
     ...question,
     host_id: user.id,
