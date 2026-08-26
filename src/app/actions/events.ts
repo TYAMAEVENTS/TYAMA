@@ -28,6 +28,7 @@ export async function createEventAction(_: CreateEventState, formData: FormData)
     return { error: "Оберіть тип події.", fields };
   }
 
+  let event: TyamaEvent | undefined;
   try {
     const rows = await supabaseRest<TyamaEvent[]>("events", {
       method: "POST",
@@ -43,10 +44,11 @@ export async function createEventAction(_: CreateEventState, formData: FormData)
         status: "draft",
       }),
     });
-    const event = rows[0];
-    if (!event) return { error: "Подію не створено. Спробуйте ще раз.", fields };
-    redirect(`/events/${event.id}`);
+    event = rows[0];
   } catch {
     return { error: "Подію не створено. Дані збережені у формі — спробуйте ще раз.", fields };
   }
+
+  if (!event) return { error: "Подію не створено. Спробуйте ще раз.", fields };
+  redirect(`/events/${event.id}`);
 }
