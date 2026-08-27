@@ -18,6 +18,7 @@ type UsableAnswer = {
 };
 
 const STORY_PROMPT = /істор|спогад|момент|сміш|кумед|познайом|пригад|випадок/i;
+const NON_SURVEY_PROMPT = /як вас звати|ваше ім['’]?я|email|e-mail|телефон|контакт|ким ви довод|ваша роль|дата народження/i;
 
 function answerValue(answer: EventSubmission["answers"][number]) {
   if (answer.answer_text?.trim()) return answer.answer_text.trim();
@@ -75,7 +76,7 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
   const grouped = new Map<string, UsableAnswer[]>();
   for (const answer of answers) grouped.set(answer.prompt, [...(grouped.get(answer.prompt) ?? []), answer]);
   const survey = [...grouped.entries()]
-    .filter(([, values]) => values.length >= 2)
+    .filter(([prompt, values]) => values.length >= 2 && !NON_SURVEY_PROMPT.test(prompt) && !STORY_PROMPT.test(prompt))
     .sort((a, b) => b[1].length - a[1].length)[0];
   if (survey) {
     const [prompt, values] = survey;
@@ -93,6 +94,24 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
       ].join("\n"),
       sourceRefs: values.map((answer) => ({ type: "answer", id: answer.id })),
       data: { generator: "smart_draft_v1", block: "interactive_100", response_count: values.length },
+    });
+  } else {
+    drafts.push({
+      generatorKey: "smart-100-setup-v2",
+      itemType: "interactive",
+      title: "100 зі 100 — підготовка збору",
+      content: [
+        "У поточних відповідях ще немає придатного спільного питання з достатньою вибіркою.",
+        "",
+        "Перед грою додайте в guest-анкету одне коротке питання, наприклад:",
+        "• Яке слово найкраще описує цю пару?",
+        "• Що вони найімовірніше зроблять у спільну вільну суботу?",
+        "• Без чого неможливо уявити їхнє спільне життя?",
+        "",
+        "Після відповідей згрупуйте однакові формулювання й призначте бали лише за фактичну частоту. TYAMA не вигадує результати.",
+      ].join("\n"),
+      sourceRefs: [],
+      data: { generator: "smart_draft_v1", block: "interactive_100_setup", response_count: 0 },
     });
   }
 
