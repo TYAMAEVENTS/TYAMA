@@ -6,6 +6,7 @@ import { updateAnswerModerationAction } from "@/app/actions/moderation";
 import { clearPublicScreenAction, endLiveSessionAction, showEventKitItemAction, startLiveSessionAction } from "@/app/actions/live";
 import { AppShell } from "@/components/app-shell";
 import { MediaReviewCard } from "@/components/media-review-card";
+import { EventKitSmartBuilder } from "@/components/event-kit-smart-builder";
 import { requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { listEventKitItems } from "@/lib/event-kit/data";
@@ -119,7 +120,11 @@ export default async function EventSectionPage({ params, searchParams }: { param
               </article>
             )) : <section className="empty-state empty-state--compact"><span className="empty-state__number">00</span><div><h2>Поки порожньо.</h2><p>Додайте перший блок вручну або перенесіть сильну відповідь із розділу «Відповіді».</p></div></section>}
           </div>
-          <aside className="create-questionnaire-panel event-kit-create"><span className="eyebrow">MANUAL / SAFE FALLBACK</span><h2>Новий блок</h2><form action={createEventKitItemAction.bind(null, eventId)} className="editor-form"><div className="form-field"><label className="form-field__label" htmlFor="kit-new-type">Тип</label><select id="kit-new-type" name="type"><option value="story">Історія</option><option value="fact">Факт</option><option value="question">Питання</option><option value="interactive">Інтерактив</option><option value="note">Нотатка</option><option value="warning">Важливо</option><option value="other">Інше</option></select></div><div className="form-field"><label className="form-field__label" htmlFor="kit-new-title">Назва</label><input id="kit-new-title" name="title" /></div><div className="form-field"><label className="form-field__label" htmlFor="kit-new-content">Матеріал</label><textarea id="kit-new-content" name="content" /></div><button className="button button--brand button--solid" type="submit">Додати в Event Kit</button></form></aside>
+          <aside className="create-questionnaire-panel event-kit-create">
+            <span className="eyebrow">SMART DRAFT / SAFE BY DEFAULT</span><h2>Відповіді → робочі блоки</h2>
+            <EventKitSmartBuilder eventId={eventId} />
+            <hr />
+            <span className="eyebrow">MANUAL / SAFE FALLBACK</span><h2>Новий блок</h2><form action={createEventKitItemAction.bind(null, eventId)} className="editor-form"><div className="form-field"><label className="form-field__label" htmlFor="kit-new-type">Тип</label><select id="kit-new-type" name="type"><option value="story">Історія</option><option value="fact">Факт</option><option value="question">Питання</option><option value="interactive">Інтерактив</option><option value="note">Нотатка</option><option value="warning">Важливо</option><option value="other">Інше</option></select></div><div className="form-field"><label className="form-field__label" htmlFor="kit-new-title">Назва</label><input id="kit-new-title" name="title" /></div><div className="form-field"><label className="form-field__label" htmlFor="kit-new-content">Матеріал</label><textarea id="kit-new-content" name="content" /></div><button className="button button--brand button--solid" type="submit">Додати в Event Kit</button></form></aside>
         </section>
       </AppShell>
     );

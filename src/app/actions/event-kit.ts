@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
+import { buildSmartEventKitDrafts } from "@/lib/event-kit/draft-builder";
 import { EVENT_KIT_TYPES, type EventKitItem, type EventKitType } from "@/lib/event-kit/types";
+import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
 
 const PRIVACY = ["host_only", "review_required", "public_allowed"] as const;
@@ -13,6 +15,13 @@ const STATUSES = ["draft", "approved", "rejected", "used"] as const;
 export type MediaEventKitState = {
   success?: boolean;
   alreadyExists?: boolean;
+  error?: string;
+};
+
+export type BuildEventKitState = {
+  success?: boolean;
+  created?: number;
+  skipped?: number;
   error?: string;
 };
 
@@ -52,6 +61,57 @@ export async function createEventKitItemAction(eventId: string, formData: FormDa
     }),
   });
   revalidatePath(`/events/${eventId}/event-kit`);
+}
+
+export async function buildEventKitDraftsAction(
+  eventId: string,
+  _previousState: BuildEventKitState,
+  _formData: FormData,
+): Promise<BuildEventKitState> {
+  void _previousState;
+  void _formData;
+  const { user, accessToken } = await hostContext(eventId);
+  try {
+    const [submissions, existing, last] = await Promise.all([
+      listEventSubmissions(eventId),
+      supabaseRest<Array<Pick<EventKitItem, "data">>>(
+        `event_kit_items?select=data&event_id=eq.${eventId}`,
+        { accessToken },
+      ),
+      supabaseRest<Array<Pick<EventKitItem, "sort_order">>>(
+        `event_kit_items?select=sort_order&event_id=eq.${eventId}&order=sort_order.desc&limit=1`,
+        { accessToken },
+      ),
+    ]);
+    const drafts = buildSmartEventKitDrafts(submissions);
+    if (!drafts.length) return { error: "Ще немає відповідей, з яких можна зібрати Event Kit." };
+    const existingKeys = new Set(existing.flatMap((item) => typeof item.data.generator_key === "string" ? [item.data.generator_key] : []));
+    const missing = drafts.filter((draft) => !existingKeys.has(draft.generatorKey));
+    if (missing.length) {
+      const firstSortOrder = (last[0]?.sort_order ?? 0) + 10;
+      await supabaseRest("event_kit_items", {
+        method: "POST",
+        accessToken,
+        body: JSON.stringify(missing.map((draft, index) => ({
+          host_id: user.id,
+          event_id: eventId,
+          source_type: "ai",
+          item_type: draft.itemType,
+          title: draft.title,
+          content: draft.content,
+          data: { ...draft.data, generator_key: draft.generatorKey },
+          source_refs: draft.sourceRefs,
+          status: "draft",
+          privacy_status: "host_only",
+          sort_order: firstSortOrder + index * 10,
+        }))),
+      });
+    }
+    revalidatePath(`/events/${eventId}/event-kit`);
+    return { success: true, created: missing.length, skipped: drafts.length - missing.length };
+  } catch {
+    return { error: "Не вдалося зібрати чернетки. Raw answers і ручний Event Kit залишилися без змін." };
+  }
 }
 
 export async function createEventKitItemFromAnswerAction(eventId: string, answerId: string) {
