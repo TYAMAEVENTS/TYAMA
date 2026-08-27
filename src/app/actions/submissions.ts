@@ -4,7 +4,7 @@ import { capabilityHash } from "@/lib/questionnaires/tokens";
 import { getPublicQuestionnaire } from "@/lib/questionnaires/data";
 import { supabaseEdge } from "@/lib/supabase/edge";
 
-export type PublicSubmissionState = { error?: string; success?: boolean };
+export type PublicSubmissionState = { error?: string; success?: boolean; submissionId?: string };
 
 export async function submitPublicQuestionnaireAction(rawToken: string, _: PublicSubmissionState, formData: FormData): Promise<PublicSubmissionState> {
   const questionnaire = await getPublicQuestionnaire(rawToken);
@@ -29,14 +29,14 @@ export async function submitPublicQuestionnaireAction(rawToken: string, _: Publi
   if (missingRequired) return { error: "Заповніть усі обов’язкові поля." };
 
   try {
-    await supabaseEdge({
+    const result = await supabaseEdge<{ submission_id: string }>({
       action: "submit_questionnaire",
       token_hash: capabilityHash(rawToken),
       idempotency_hash: capabilityHash(`${rawToken}:${idempotencyKey}`),
       display_name: displayName,
       answers,
     });
-    return { success: true };
+    return { success: true, submissionId: result.submission_id };
   } catch {
     return { error: "Не вдалося надіслати відповіді. Ваш текст лишився у формі — спробуйте ще раз." };
   }

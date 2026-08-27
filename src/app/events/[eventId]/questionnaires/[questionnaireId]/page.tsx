@@ -61,7 +61,8 @@ export default async function QuestionnaireEditorPage({
         <form action={updateQuestionnaireAction.bind(null, eventId, questionnaireId)} className="editor-form">
           <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-title">Назва</label><input id="questionnaire-title" name="title" defaultValue={questionnaire.title} required /></div>
           <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-description">Вступний текст</label><textarea id="questionnaire-description" name="description" defaultValue={questionnaire.description ?? ""} /></div>
-          <button className="button button--neutral button--outline" type="submit">Зберегти опис</button>
+          <fieldset className="media-permissions"><legend>Що можна завантажувати</legend><label><input type="checkbox" name="allowImages" defaultChecked={questionnaire.allow_images} /> Фото до 10 МБ</label><label><input type="checkbox" name="allowVideo" defaultChecked={questionnaire.allow_video} /> Відео до 100 МБ</label><label><input type="checkbox" name="allowAudio" defaultChecked={questionnaire.allow_audio} /> Аудіо до 25 МБ</label></fieldset>
+          <button className="button button--neutral button--outline" type="submit">Зберегти налаштування</button>
         </form>
 
         <div className="publish-panel">
@@ -82,6 +83,7 @@ export default async function QuestionnaireEditorPage({
           <article className={`question-card ${question.is_active ? "" : "question-card--inactive"}`} key={question.id}>
             <div className="question-card__index">{String(index + 1).padStart(2, "0")}</div>
             <form action={updateQuestionAction.bind(null, eventId, questionnaireId, question.id)} className="question-card__form">
+              <input type="hidden" name="type" value={question.type} />
               <div className="question-card__meta"><span>{QUESTION_TYPE_LABELS[question.type]}</span><span>{question.default_privacy}</span></div>
               <div className="form-field"><label className="form-field__label" htmlFor={`prompt-${question.id}`}>Питання</label><textarea id={`prompt-${question.id}`} name="prompt" defaultValue={question.prompt} required /></div>
               <div className="form-field"><label className="form-field__label" htmlFor={`help-${question.id}`}>Підказка</label><input id={`help-${question.id}`} name="helpText" defaultValue={question.help_text ?? ""} /></div>
@@ -104,7 +106,7 @@ export default async function QuestionnaireEditorPage({
         <span className="eyebrow">ДОДАТИ ПИТАННЯ</span>
         <form action={addQuestionAction.bind(null, eventId, questionnaireId)} className="editor-form">
           <div className="form-field"><label className="form-field__label" htmlFor="new-prompt">Текст питання</label><textarea id="new-prompt" name="prompt" required /></div>
-          <div className="form-grid"><div className="form-field"><label className="form-field__label" htmlFor="new-type">Тип</label><select id="new-type" name="type"><option value="short_text">Коротка відповідь</option><option value="long_text">Розгорнута відповідь</option><option value="boolean">Так / ні</option><option value="single_select">Один варіант</option><option value="multi_select">Кілька варіантів</option></select></div><label className="checkbox-field"><input type="checkbox" name="isRequired" /> Обов’язкове</label></div>
+          <div className="form-grid"><div className="form-field"><label className="form-field__label" htmlFor="new-type">Тип</label><select id="new-type" name="type"><option value="short_text">Коротка відповідь</option><option value="long_text">Розгорнута відповідь</option><option value="boolean">Так / ні</option><option value="single_select">Один варіант</option><option value="multi_select">Кілька варіантів</option><option value="media">Фото / відео / аудіо</option></select></div><label className="checkbox-field"><input type="checkbox" name="isRequired" /> Обов’язкове</label></div>
           <button className="button button--brand button--solid" type="submit">Додати питання</button>
         </form>
       </section>

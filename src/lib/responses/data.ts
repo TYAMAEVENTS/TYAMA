@@ -2,6 +2,7 @@ import "server-only";
 import { getAccessToken } from "@/lib/auth/session";
 import { supabaseRest } from "@/lib/supabase/rest";
 import type { QuestionnaireAudience, QuestionType } from "@/lib/questionnaires/types";
+import type { MediaAsset } from "@/lib/media/types";
 
 export type EventSubmission = {
   id: string;
@@ -19,6 +20,7 @@ export type EventSubmission = {
     is_useful: boolean;
     do_not_use: boolean;
     question: { prompt: string; type: QuestionType } | null;
+    media_assets: MediaAsset[];
   }>;
 };
 
@@ -26,7 +28,7 @@ export async function listEventSubmissions(eventId: string): Promise<EventSubmis
   const accessToken = await getAccessToken();
   if (!accessToken) return [];
   return supabaseRest<EventSubmission[]>(
-    `submissions?select=id,status,submitted_at,created_at,respondent:respondents(display_name,relationship_label),questionnaire:questionnaires(title,audience),answers(id,answer_text,answer_json,privacy_status,moderation_status,is_useful,do_not_use,question:questions(prompt,type))&event_id=eq.${encodeURIComponent(eventId)}&status=neq.draft&order=created_at.desc`,
+    `submissions?select=id,status,submitted_at,created_at,respondent:respondents(display_name,relationship_label),questionnaire:questionnaires(title,audience),answers(id,answer_text,answer_json,privacy_status,moderation_status,is_useful,do_not_use,question:questions(prompt,type),media_assets(id,kind,original_filename,mime_type,size_bytes,status,privacy_status,moderation_status))&event_id=eq.${encodeURIComponent(eventId)}&status=neq.draft&order=created_at.desc`,
     { accessToken },
   );
 }

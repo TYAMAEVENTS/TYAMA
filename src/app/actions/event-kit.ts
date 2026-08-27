@@ -76,6 +76,33 @@ export async function createEventKitItemFromAnswerAction(eventId: string, answer
   revalidatePath(`/events/${eventId}/responses`);
 }
 
+export async function createEventKitItemFromMediaAction(eventId: string, assetId: string) {
+  const { user, accessToken } = await hostContext(eventId);
+  const assets = await supabaseRest<Array<{ id: string; kind: string; original_filename: string | null; privacy_status: string; moderation_status: string }>>(
+    `media_assets?select=id,kind,original_filename,privacy_status,moderation_status&id=eq.${assetId}&event_id=eq.${eventId}&status=eq.ready&limit=1`,
+    { accessToken },
+  );
+  const asset = assets[0];
+  if (!asset) return;
+  await supabaseRest("event_kit_items", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({
+      host_id: user.id,
+      event_id: eventId,
+      source_type: "manual",
+      item_type: "media",
+      title: asset.original_filename || `${asset.kind} з анкети`,
+      content: "Медіа з відповіді. Перевірте privacy та moderation перед показом.",
+      source_refs: [{ type: "media_asset", id: asset.id }],
+      status: "draft",
+      privacy_status: "host_only",
+    }),
+  });
+  revalidatePath(`/events/${eventId}/event-kit`);
+  revalidatePath(`/events/${eventId}/responses`);
+}
+
 export async function updateEventKitItemAction(eventId: string, itemId: string, formData: FormData) {
   const { accessToken } = await hostContext(eventId);
   const title = String(formData.get("title") ?? "").trim().slice(0, 300);

@@ -1,17 +1,47 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { submitPublicQuestionnaireAction, type PublicSubmissionState } from "@/app/actions/submissions";
 import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status";
 import type { PublicQuestionnaire } from "@/lib/questionnaires/data";
+import { PublicMediaUploader, type SelectedMediaFile } from "./public-media-uploader";
 
 const initialState: PublicSubmissionState = {};
 
 export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }: { questionnaire: PublicQuestionnaire; token: string; idempotencyKey: string }) {
   const [state, action, pending] = useActionState(submitPublicQuestionnaireAction.bind(null, token), initialState);
+  const [selectedMedia, setSelectedMedia] = useState<Record<string, File[]>>({});
+  const [mediaError, setMediaError] = useState<string>();
+  const mediaFiles = useMemo<SelectedMediaFile[]>(() => Object.entries(selectedMedia).flatMap(([questionId, files]) => files.map((file) => ({ questionId, file }))), [selectedMedia]);
+  const acceptedMedia = [
+    questionnaire.allow_images ? "image/jpeg,image/png,image/webp" : "",
+    questionnaire.allow_video ? "video/mp4,video/quicktime" : "",
+    questionnaire.allow_audio ? "audio/mpeg,audio/mp4,audio/wav" : "",
+  ].filter(Boolean).join(",");
+
+  function selectFiles(questionId: string, files: FileList | null) {
+    const next = Array.from(files ?? []);
+    const otherCount = Object.entries(selectedMedia).reduce((count, [key, current]) => key === questionId ? count : count + current.length, 0);
+    if (otherCount + next.length > 10) {
+      setMediaError("До однієї анкети можна додати максимум 10 файлів.");
+      return;
+    }
+    const invalid = next.find((file) => !acceptedMedia.split(",").includes(file.type)
+      || file.size <= 0
+      || file.size > 100 * 1024 * 1024
+      || (file.type.startsWith("image/") && file.size > 10 * 1024 * 1024)
+      || (file.type.startsWith("audio/") && file.size > 25 * 1024 * 1024));
+    if (invalid) {
+      setMediaError(`Файл «${invalid.name}» має непідтримуваний формат або розмір.`);
+      return;
+    }
+    setMediaError(undefined);
+    setSelectedMedia((current) => ({ ...current, [questionId]: next }));
+  }
+
   if (state.success) {
-    return <section className="public-success"><span className="public-success__mark">✓</span><h2>Збіглося.</h2><p>Відповіді вже у Свята. Їх ніхто не побачить публічно без його перевірки.</p></section>;
+    return mediaFiles.length ? <PublicMediaUploader token={token} idempotencyKey={idempotencyKey} files={mediaFiles} /> : <section className="public-success"><span className="public-success__mark">✓</span><h2>Збіглося.</h2><p>Відповіді вже у Свята. Їх ніхто не побачить публічно без його перевірки.</p></section>;
   }
   return (
     <form action={action} className="public-form">
@@ -29,9 +59,10 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
           {question.type === "short_text" ? <input id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} /> : null}
           {question.type === "boolean" ? <select id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required}><option value="">Оберіть</option><option value="yes">Так</option><option value="no">Ні</option></select> : null}
           {(question.type === "single_select" || question.type === "multi_select") ? <select id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} multiple={question.type === "multi_select"}>{question.type === "single_select" ? <option value="">Оберіть</option> : null}{(question.settings.options ?? []).map((option) => <option value={option} key={option}>{option}</option>)}</select> : null}
-          {question.type === "media" ? <div className="status">Завантаження файлів буде ввімкнено лише після окремого media QA.</div> : null}
+          {question.type === "media" ? <input id={`answer-${question.id}`} type="file" accept={acceptedMedia} multiple onChange={(event) => selectFiles(question.id, event.currentTarget.files)} /> : null}
         </div>
       ))}
+      {mediaError ? <StatusMessage tone="error">{mediaError}</StatusMessage> : null}
       <div className="public-submit"><p>Натискаючи «Надіслати», ви передаєте відповіді ведучому цієї події. Публікація можлива лише після ручної модерації.</p><Button type="submit" busy={pending}>Надіслати Святу →</Button></div>
     </form>
   );

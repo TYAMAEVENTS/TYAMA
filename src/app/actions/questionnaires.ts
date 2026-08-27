@@ -119,7 +119,13 @@ export async function updateQuestionnaireAction(eventId: string, questionnaireId
   await supabaseRest(`questionnaires?id=eq.${questionnaireId}&event_id=eq.${eventId}`, {
     method: "PATCH",
     accessToken,
-    body: JSON.stringify({ title, description: description || null }),
+    body: JSON.stringify({
+      title,
+      description: description || null,
+      allow_images: formData.get("allowImages") === "on",
+      allow_video: formData.get("allowVideo") === "on",
+      allow_audio: formData.get("allowAudio") === "on",
+    }),
   });
   revalidatePath(pathFor(eventId, questionnaireId));
 }
@@ -161,7 +167,7 @@ export async function addQuestionAction(eventId: string, questionnaireId: string
       questionnaire_id: questionnaireId,
       type,
       prompt,
-      is_required: formData.get("isRequired") === "on",
+      is_required: type !== "media" && formData.get("isRequired") === "on",
       sort_order: (current[0]?.sort_order ?? 0) + 10,
       default_privacy: "review_required",
     }),
@@ -172,6 +178,7 @@ export async function addQuestionAction(eventId: string, questionnaireId: string
 export async function updateQuestionAction(eventId: string, questionnaireId: string, questionId: string, formData: FormData) {
   const { accessToken } = await hostContext(eventId);
   const prompt = String(formData.get("prompt") ?? "").trim().slice(0, 1000);
+  const type = String(formData.get("type") ?? "short_text");
   if (!prompt) redirect(`${pathFor(eventId, questionnaireId)}?error=question-prompt`);
   await supabaseRest(`questions?id=eq.${questionId}&questionnaire_id=eq.${questionnaireId}&event_id=eq.${eventId}`, {
     method: "PATCH",
@@ -179,7 +186,7 @@ export async function updateQuestionAction(eventId: string, questionnaireId: str
     body: JSON.stringify({
       prompt,
       help_text: String(formData.get("helpText") ?? "").trim().slice(0, 500) || null,
-      is_required: formData.get("isRequired") === "on",
+      is_required: type !== "media" && formData.get("isRequired") === "on",
       is_active: formData.get("isActive") === "on",
       default_privacy: String(formData.get("privacy") ?? "review_required"),
     }),

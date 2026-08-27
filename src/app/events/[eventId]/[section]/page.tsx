@@ -5,6 +5,7 @@ import { createEventKitItemAction, createEventKitItemFromAnswerAction, updateEve
 import { updateAnswerModerationAction } from "@/app/actions/moderation";
 import { clearPublicScreenAction, endLiveSessionAction, showEventKitItemAction, startLiveSessionAction } from "@/app/actions/live";
 import { AppShell } from "@/components/app-shell";
+import { MediaReviewCard } from "@/components/media-review-card";
 import { requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { listEventKitItems } from "@/lib/event-kit/data";
@@ -68,7 +69,30 @@ export default async function EventSectionPage({ params, searchParams }: { param
         {submissions.length ? <div className="submission-list">{submissions.map((submission, index) => (
           <article className="submission-card" key={submission.id}>
             <header><span className="submission-card__index">{String(index + 1).padStart(2, "0")}</span><div><span className="eyebrow">{submission.questionnaire ? AUDIENCE_LABELS[submission.questionnaire.audience] : "Анкета"}</span><h2>{submission.respondent?.display_name || "Без імені"}</h2><p>{submission.questionnaire?.title || "Анкета"} · {new Intl.DateTimeFormat("uk-UA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(submission.submitted_at || submission.created_at))}</p></div><span className={`state-chip state-chip--${submission.status}`}>{submission.status}</span></header>
-            <div className="answer-list">{submission.answers.map((answer) => <div className="answer-row" key={answer.id}><div><span className="answer-row__privacy">{answer.privacy_status} / {answer.moderation_status}</span><h3>{answer.question?.prompt || "Питання"}</h3></div><div className="answer-row__content"><p>{answer.answer_text ?? JSON.stringify(answer.answer_json)}</p><form action={updateAnswerModerationAction.bind(null, eventId, answer.id)} className="moderation-form"><select name="privacy" defaultValue={answer.privacy_status} aria-label="Приватність"><option value="host_only">Лише ведучий</option><option value="review_required">Після перевірки</option><option value="public_allowed">Можна у public</option></select><select name="moderation" defaultValue={answer.moderation_status} aria-label="Модерація"><option value="pending">Очікує</option><option value="approved">Схвалено</option><option value="rejected">Відхилено</option></select><label><input type="checkbox" name="isUseful" defaultChecked={answer.is_useful} /> Корисне</label><label><input type="checkbox" name="doNotUse" defaultChecked={answer.do_not_use} /> Не використовувати</label><button className="text-action" type="submit">Зберегти статус →</button></form><form action={createEventKitItemFromAnswerAction.bind(null, eventId, answer.id)}><button className="button button--neutral button--outline" type="submit">Додати в Event Kit</button></form></div></div>)}</div>
+            <div className="answer-list">{submission.answers.map((answer) => {
+              const isMedia = answer.question?.type === "media";
+              return (
+                <div className="answer-row" key={answer.id}>
+                  <div>
+                    <span className="answer-row__privacy">{isMedia ? `Медіафайли / ${answer.media_assets.length}` : `${answer.privacy_status} / ${answer.moderation_status}`}</span>
+                    <h3>{answer.question?.prompt || "Питання"}</h3>
+                  </div>
+                  <div className="answer-row__content">
+                    {isMedia ? (
+                      answer.media_assets.length
+                        ? <div className="media-review-list">{answer.media_assets.map((asset) => <MediaReviewCard asset={asset} eventId={eventId} key={asset.id} />)}</div>
+                        : <p>Медіафайли ще завантажуються або не пройшли перевірку.</p>
+                    ) : (
+                      <>
+                        <p>{answer.answer_text ?? JSON.stringify(answer.answer_json)}</p>
+                        <form action={updateAnswerModerationAction.bind(null, eventId, answer.id)} className="moderation-form"><select name="privacy" defaultValue={answer.privacy_status} aria-label="Приватність"><option value="host_only">Лише ведучий</option><option value="review_required">Після перевірки</option><option value="public_allowed">Можна у public</option></select><select name="moderation" defaultValue={answer.moderation_status} aria-label="Модерація"><option value="pending">Очікує</option><option value="approved">Схвалено</option><option value="rejected">Відхилено</option></select><label><input type="checkbox" name="isUseful" defaultChecked={answer.is_useful} /> Корисне</label><label><input type="checkbox" name="doNotUse" defaultChecked={answer.do_not_use} /> Не використовувати</label><button className="text-action" type="submit">Зберегти статус →</button></form>
+                        <form action={createEventKitItemFromAnswerAction.bind(null, eventId, answer.id)}><button className="button button--neutral button--outline" type="submit">Додати в Event Kit</button></form>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}</div>
           </article>
         ))}</div> : <section className="empty-state"><span className="empty-state__number">00</span><div><h2>Відповідей ще немає.</h2><p>Після першого public submit тут з’явиться окрема картка респондента з raw answers і privacy status.</p><Link href={`/events/${eventId}/questionnaires`} className="text-action">Перейти до анкет →</Link></div></section>}
       </AppShell>
@@ -126,7 +150,7 @@ export default async function EventSectionPage({ params, searchParams }: { param
           <a className="backup-card" href={`/events/${eventId}/backup/responses.csv`} download><span>01 / CSV</span><h2>Усі відповіді</h2><p>Рядок на кожну raw answer із privacy та moderation status.</p><strong>Завантажити →</strong></a>
           <a className="backup-card" href={`/events/${eventId}/backup/snapshot.json`} download><span>02 / JSON</span><h2>Snapshot події</h2><p>Event, анкети, submissions і Event Kit в одному машинозчитуваному файлі.</p><strong>Завантажити →</strong></a>
           <Link className="backup-card" href={`/events/${eventId}/backup/print`} target="_blank"><span>03 / PRINT</span><h2>Event Kit офлайн</h2><p>Відкрити clean сторінку й зберегти через браузер як PDF.</p><strong>Відкрити →</strong></Link>
-          <div className="backup-card backup-card--disabled"><span>04 / MEDIA</span><h2>Медіа вимкнено</h2><p>Image/video/audio не буде ввімкнено до завершення upload/read/privacy QA на реальному mobile flow.</p><strong>SAFE BY DEFAULT</strong></div>
+          <Link className="backup-card" href={`/events/${eventId}/responses`}><span>04 / MEDIA</span><h2>Приватні медіа</h2><p>Переглянути й завантажити перевірені фото, відео та аудіо без відкриття Storage назовні.</p><strong>Відкрити відповіді →</strong></Link>
         </section>
         <aside className="backup-check"><span className="eyebrow">ПЕРЕД ВИЇЗДОМ</span><p>CSV ✓ &nbsp; JSON ✓ &nbsp; PDF/PRINT ✓ &nbsp; потрібні медіа локально ✓ &nbsp; зарядка/HDMI ✓</p></aside>
       </AppShell>

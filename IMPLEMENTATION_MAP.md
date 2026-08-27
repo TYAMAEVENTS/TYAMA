@@ -32,7 +32,7 @@ Source: `TYAMA_PILOT_SVIAT_HANDOFF_v3`, with legacy-repository requirements expl
 - `/q/[token]`
 - `/screen/[token]`
 - `/api/public-screen/[token]`
-- Supabase Edge Function: `public-api` (`get_questionnaire`, `submit_questionnaire`, `get_public_screen`)
+- Supabase Edge Function: `public-api` (`get_questionnaire`, `submit_questionnaire`, `prepare_media_upload`, `complete_media_upload`, `get_public_screen`)
 
 ## Data boundary
 
@@ -46,8 +46,8 @@ The Pilot is not ready until all P0 checks and the 20-step E2E acceptance flow p
 
 Implemented and production-building: Auth shell, Host Dashboard, Event creation/workspace, questionnaire CRUD/order/publish/close, transactional public submission, raw responses, moderation/privacy, manual Event Kit fallback, Rehearsal/Live sessions, sanitized Public Screen with polling fallback, CSV/JSON/print backup.
 
-Infrastructure applied: clean Supabase project, five canonical migrations, 11 RLS-enabled application tables, private Storage bucket, and active `public-api` Edge Function. Security advisor has zero findings.
+Infrastructure applied: clean Supabase project, canonical migrations, 11 RLS-enabled application tables, private Storage bucket, and active `public-api` Edge Function. Security advisor has one Auth-level warning: leaked-password protection is disabled.
 
-Intentionally disabled: media UI until mobile upload/read/privacy QA passes.
+Media v1 implemented on 2026-08-27: questionnaire-level image/video/audio switches, capability-scoped signed uploads, private host preview/download, per-asset moderation, and Event Kit linkage. Public Screen never receives media automatically. Production mobile upload/read/privacy QA remains a release gate.
 
-External release gates: create the manual Host Auth user; establish the GitHub remote; remove/resolve Vercel deployment protection and verify the production alias; then run the full two-Event E2E checklist.
+External release gates: enable Supabase leaked-password protection, finish Media v1 production mobile QA, and complete the remaining pilot acceptance checks. The Host Auth user, GitHub remote, production alias, and core two-Event isolation checks are complete.
