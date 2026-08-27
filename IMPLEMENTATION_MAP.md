@@ -58,6 +58,8 @@ Live session transitions became transactional on 2026-08-27. `rehearsal → live
 
 Live Auto Slideshow was added on 2026-08-27: the host can start/stop a 10/20/30-second cycle from the Live console. The client receives only the already-filtered `approved + public_allowed` candidate IDs, serializes server actions to prevent overlapping transitions, and stops when the console closes. Manual show controls remain available.
 
+Live screen controls became transactional on 2026-08-27. Show and clear operations now lock the Event, require an active session, increment the canonical revision atomically, and re-check the selected item inside Postgres (`approved/used + public_allowed + !do_not_use`). A rollback acceptance test confirmed monotonic revisions, correct session linkage, a clean clear state, and rejection of a private item.
+
 Questionnaire creation became transactional on 2026-08-27. The questionnaire, deterministic public capability hash, and complete 4/23-question starter set are now written by one RLS-respecting `SECURITY INVOKER` RPC. A rollback acceptance test confirmed complete creation for the owner, zero persisted QA rows, and denial for a foreign authenticated UUID; `anon` and `PUBLIC` have no execute grant.
 
 External release gates: enable Supabase leaked-password protection, finish Media v1 physical mobile/video/audio QA, perform the final logged-in UI click-through for transactional questionnaire creation, Live, and Auto Slideshow, and complete the remaining pilot acceptance checks. The Host Auth user, GitHub remote, production alias, Smart Draft flow, image upload/read/privacy QA, exports, transactional questionnaire/Live data boundaries, and core two-Event isolation checks are complete.
