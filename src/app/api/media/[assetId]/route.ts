@@ -37,17 +37,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
   if (!signedResponse.ok) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
   const payload = await signedResponse.json() as { signedURL?: string; signedUrl?: string };
-  const signedUrl = payload.signedURL ?? payload.signedUrl;
-  if (!signedUrl) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
-
-  const supabaseOrigin = new URL(url).origin;
-  const redirectUrl = signedUrl.startsWith("http://") || signedUrl.startsWith("https://")
-    ? new URL(signedUrl)
-    : new URL(signedUrl.startsWith("/storage/v1/") ? signedUrl : `/storage/v1/${signedUrl.replace(/^\/+/, "")}`, url);
-  if (redirectUrl.origin !== supabaseOrigin) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
+  const relativeUrl = payload.signedURL ?? payload.signedUrl;
+  if (!relativeUrl) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
+  const redirectUrl = new URL(relativeUrl, url);
   if (request.nextUrl.searchParams.get("download") === "1") {
     redirectUrl.searchParams.set("download", asset.original_filename || "tyama-media");
   }
   return NextResponse.redirect(redirectUrl, { headers: { "Cache-Control": "private, no-store" } });
 }
-316573e9cb4776e7c0bbdd8a4e930cae83422374
