@@ -37,9 +37,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
   if (!signedResponse.ok) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
   const payload = await signedResponse.json() as { signedURL?: string; signedUrl?: string };
-  const relativeUrl = payload.signedURL ?? payload.signedUrl;
-  if (!relativeUrl) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
-  const redirectUrl = new URL(relativeUrl, url);
+  const signedUrl = payload.signedURL ?? payload.signedUrl;
+  if (!signedUrl?.startsWith("/")) return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
+  const signedPath = signedUrl.startsWith("/storage/v1/")
+    ? signedUrl
+    : `/storage/v1${signedUrl}`;
+  const redirectUrl = new URL(signedPath, url);
   if (request.nextUrl.searchParams.get("download") === "1") {
     redirectUrl.searchParams.set("download", asset.original_filename || "tyama-media");
   }
