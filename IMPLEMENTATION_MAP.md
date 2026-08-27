@@ -64,4 +64,6 @@ Questionnaire creation became transactional on 2026-08-27. The questionnaire, de
 
 Production privacy headers were hardened on 2026-08-27: capability URLs are never sent as referrers, the Pilot is excluded from indexing/archiving, framing is denied, MIME sniffing is disabled, and cross-origin opener isolation is enabled. A restrictive CSP remains intentionally deferred until direct signed-upload behavior is covered by physical mobile media QA.
 
+Battle Backup was aligned with the handoff safety contract on 2026-08-27: CSV includes media IDs and filenames, JSON includes the active Live session and canonical Live state, and the printable Event Kit contains only approved/used program blocks plus a separate visible do-not-use/warning section. Drafts no longer silently enter the offline run sheet.
+
 External release gates: enable Supabase leaked-password protection, finish Media v1 physical mobile/video/audio QA, perform the final logged-in UI click-through for transactional questionnaire creation, Live, and Auto Slideshow, and complete the remaining pilot acceptance checks. The Host Auth user, GitHub remote, production alias, Smart Draft flow, image upload/read/privacy QA, exports, transactional questionnaire/Live data boundaries, and core two-Event isolation checks are complete.

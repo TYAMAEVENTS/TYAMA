@@ -252,6 +252,11 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .print-kit__index { font-family: var(--font-display); font-size: 1.8rem; }
 .print-kit__items h2 { font-size: 1.8rem; }
 .print-kit__items p { white-space: pre-wrap; }
+.print-kit__safety { margin: 40px 0; padding: 24px; border: 3px solid #b42318; background: #fff4f2; break-inside: avoid; }
+.print-kit__safety > .eyebrow { color: #b42318; }
+.print-kit__safety article { padding-top: 18px; }
+.print-kit__safety article + article { margin-top: 18px; border-top: 1px solid #b42318; }
+.print-kit__safety p { margin-top: 6px; white-space: pre-wrap; }
 
 .public-page { min-height: 100vh; padding: 22px clamp(16px, 5vw, 64px) 38px; }
 .public-header { display: flex; justify-content: space-between; align-items: center; min-height: 72px; border-bottom: var(--line); font-size: 11px; text-transform: uppercase; }
