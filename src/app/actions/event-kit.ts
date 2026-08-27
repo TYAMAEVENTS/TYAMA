@@ -25,6 +25,12 @@ export type BuildEventKitState = {
   error?: string;
 };
 
+export type AnswerEventKitState = {
+  success?: boolean;
+  alreadyExists?: boolean;
+  error?: string;
+};
+
 async function hostContext(eventId: string) {
   const user = await requireUser();
   const accessToken = await getAccessToken();
@@ -114,32 +120,53 @@ export async function buildEventKitDraftsAction(
   }
 }
 
-export async function createEventKitItemFromAnswerAction(eventId: string, answerId: string) {
+export async function createEventKitItemFromAnswerAction(
+  eventId: string,
+  answerId: string,
+  _previousState: AnswerEventKitState,
+  _formData: FormData,
+): Promise<AnswerEventKitState> {
+  void _previousState;
+  void _formData;
   const { user, accessToken } = await hostContext(eventId);
-  const answers = await supabaseRest<Array<{ id: string; answer_text: string | null; answer_json: unknown; question: { prompt: string } | null }>>(
-    `answers?select=id,answer_text,answer_json,question:questions(prompt)&id=eq.${answerId}&event_id=eq.${eventId}&limit=1`,
-    { accessToken },
-  );
-  const answer = answers[0];
-  if (!answer) return;
-  const content = answer.answer_text ?? JSON.stringify(answer.answer_json);
-  await supabaseRest("event_kit_items", {
-    method: "POST",
-    accessToken,
-    body: JSON.stringify({
-      host_id: user.id,
-      event_id: eventId,
-      source_type: "manual",
-      item_type: "story",
-      title: answer.question?.prompt || "Відповідь респондента",
-      content,
-      source_refs: [{ type: "answer", id: answer.id }],
-      status: "draft",
-      privacy_status: "host_only",
-    }),
-  });
-  revalidatePath(`/events/${eventId}/event-kit`);
-  revalidatePath(`/events/${eventId}/responses`);
+  try {
+    const [answers, existing] = await Promise.all([
+      supabaseRest<Array<{ id: string; answer_text: string | null; answer_json: unknown; question: { prompt: string } | null }>>(
+        `answers?select=id,answer_text,answer_json,question:questions(prompt)&id=eq.${answerId}&event_id=eq.${eventId}&limit=1`,
+        { accessToken },
+      ),
+      supabaseRest<Array<{ source_refs: Array<{ type?: string; id?: string }> | null }>>(
+        `event_kit_items?select=source_refs&event_id=eq.${eventId}`,
+        { accessToken },
+      ),
+    ]);
+    const answer = answers[0];
+    if (!answer) return { error: "Відповідь не знайдено." };
+    if (existing.some((item) => item.source_refs?.some((ref) => ref.type === "answer" && ref.id === answer.id))) {
+      return { success: true, alreadyExists: true };
+    }
+    const content = answer.answer_text ?? JSON.stringify(answer.answer_json);
+    await supabaseRest("event_kit_items", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({
+        host_id: user.id,
+        event_id: eventId,
+        source_type: "manual",
+        item_type: "story",
+        title: answer.question?.prompt || "Відповідь респондента",
+        content,
+        source_refs: [{ type: "answer", id: answer.id }],
+        status: "draft",
+        privacy_status: "host_only",
+      }),
+    });
+    revalidatePath(`/events/${eventId}/event-kit`);
+    revalidatePath(`/events/${eventId}/responses`);
+    return { success: true };
+  } catch {
+    return { error: "Не вдалося додати відповідь у Event Kit." };
+  }
 }
 
 export async function createEventKitItemFromMediaAction(

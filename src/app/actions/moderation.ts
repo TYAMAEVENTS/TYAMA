@@ -14,27 +14,43 @@ export type MediaModerationState = {
   error?: string;
 };
 
-export async function updateAnswerModerationAction(eventId: string, answerId: string, formData: FormData) {
+export type AnswerModerationState = {
+  success?: boolean;
+  error?: string;
+};
+
+export async function updateAnswerModerationAction(
+  eventId: string,
+  answerId: string,
+  _previousState: AnswerModerationState,
+  formData: FormData,
+): Promise<AnswerModerationState> {
+  void _previousState;
   const user = await requireUser();
   const accessToken = await getAccessToken();
   if (!accessToken) redirect("/login");
-  const event = await getEvent(eventId);
-  if (!event || event.host_id !== user.id) throw new Error("Event not found");
-  const privacyValue = String(formData.get("privacy") ?? "review_required");
-  const moderationValue = String(formData.get("moderation") ?? "pending");
-  const privacy = PRIVACY.includes(privacyValue as (typeof PRIVACY)[number]) ? privacyValue : "review_required";
-  const moderation = MODERATION.includes(moderationValue as (typeof MODERATION)[number]) ? moderationValue : "pending";
-  await supabaseRest(`answers?id=eq.${answerId}&event_id=eq.${eventId}`, {
-    method: "PATCH",
-    accessToken,
-    body: JSON.stringify({
-      privacy_status: privacy,
-      moderation_status: moderation,
-      is_useful: formData.get("isUseful") === "on",
-      do_not_use: formData.get("doNotUse") === "on",
-    }),
-  });
-  revalidatePath(`/events/${eventId}/responses`);
+  try {
+    const event = await getEvent(eventId);
+    if (!event || event.host_id !== user.id) return { error: "Подію не знайдено." };
+    const privacyValue = String(formData.get("privacy") ?? "review_required");
+    const moderationValue = String(formData.get("moderation") ?? "pending");
+    const privacy = PRIVACY.includes(privacyValue as (typeof PRIVACY)[number]) ? privacyValue : "review_required";
+    const moderation = MODERATION.includes(moderationValue as (typeof MODERATION)[number]) ? moderationValue : "pending";
+    await supabaseRest(`answers?id=eq.${answerId}&event_id=eq.${eventId}`, {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({
+        privacy_status: privacy,
+        moderation_status: moderation,
+        is_useful: formData.get("isUseful") === "on",
+        do_not_use: formData.get("doNotUse") === "on",
+      }),
+    });
+    revalidatePath(`/events/${eventId}/responses`);
+    return { success: true };
+  } catch {
+    return { error: "Не вдалося зберегти статус відповіді." };
+  }
 }
 
 export async function updateMediaModerationAction(

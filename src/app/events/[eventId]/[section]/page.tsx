@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createEventKitItemAction, createEventKitItemFromAnswerAction, updateEventKitItemAction } from "@/app/actions/event-kit";
-import { updateAnswerModerationAction } from "@/app/actions/moderation";
+import { createEventKitItemAction, updateEventKitItemAction } from "@/app/actions/event-kit";
 import { clearPublicScreenAction, endLiveSessionAction, showEventKitItemAction, startLiveSessionAction } from "@/app/actions/live";
 import { AppShell } from "@/components/app-shell";
+import { AnswerReviewActions } from "@/components/answer-review-actions";
 import { MediaReviewCard } from "@/components/media-review-card";
 import { EventKitSmartBuilder } from "@/components/event-kit-smart-builder";
 import { requireUser } from "@/lib/auth/session";
@@ -86,8 +86,7 @@ export default async function EventSectionPage({ params, searchParams }: { param
                     ) : (
                       <>
                         <p>{answer.answer_text ?? JSON.stringify(answer.answer_json)}</p>
-                        <form action={updateAnswerModerationAction.bind(null, eventId, answer.id)} className="moderation-form"><select name="privacy" defaultValue={answer.privacy_status} aria-label="Приватність"><option value="host_only">Лише ведучий</option><option value="review_required">Після перевірки</option><option value="public_allowed">Можна у public</option></select><select name="moderation" defaultValue={answer.moderation_status} aria-label="Модерація"><option value="pending">Очікує</option><option value="approved">Схвалено</option><option value="rejected">Відхилено</option></select><label><input type="checkbox" name="isUseful" defaultChecked={answer.is_useful} /> Корисне</label><label><input type="checkbox" name="doNotUse" defaultChecked={answer.do_not_use} /> Не використовувати</label><button className="text-action" type="submit">Зберегти статус →</button></form>
-                        <form action={createEventKitItemFromAnswerAction.bind(null, eventId, answer.id)}><button className="button button--neutral button--outline" type="submit">Додати в Event Kit</button></form>
+                        <AnswerReviewActions answerId={answer.id} doNotUse={answer.do_not_use} eventId={eventId} isUseful={answer.is_useful} moderation={answer.moderation_status} privacy={answer.privacy_status} />
                       </>
                     )}
                   </div>
