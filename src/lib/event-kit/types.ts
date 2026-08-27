@@ -5,7 +5,7 @@ export type EventKitItem = {
   id: string;
   host_id: string;
   event_id: string;
-  source_type: "manual" | "ai";
+  source_type: "manual" | "rules" | "ai";
   item_type: EventKitType;
   title: string | null;
   content: string | null;

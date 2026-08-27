@@ -54,6 +54,8 @@ Production Media v1 image QA passed on 2026-08-27 with one owner-approved synthe
 
 Smart Draft production QA passed on 2026-08-27: one host action creates separate context, story, interactive-preparation, and host-cheatsheet blocks from usable raw answers. Every generated item starts as `draft + host_only`, records source references, and has a stable generator key. Repeated runs create no duplicates. Identity/contact prompts are excluded from survey games; insufficient data produces an honest collection plan instead of invented scores.
 
+Smart Draft provenance was made explicit on 2026-08-27: deterministic generated blocks use `source_type=rules`, not `ai`. Existing Smart Draft v1 rows were migrated narrowly by generator metadata. Real AI remains a separate optional server-side path and is not claimed as configured while production has no OpenAI key.
+
 Live session transitions became transactional on 2026-08-27. `rehearsal → live → end` now updates the Event, active session, and canonical live state in one RLS-respecting `SECURITY INVOKER` RPC. A rollback acceptance test confirmed exactly one active session through switches, matching live-state foreign keys, clean end state, and denial for a foreign authenticated UUID.
 
 Live Auto Slideshow was added on 2026-08-27: the host can start/stop a 10/20/30-second cycle from the Live console. The client receives only the already-filtered `approved + public_allowed` candidate IDs, serializes server actions to prevent overlapping transitions, and stops when the console closes. Manual show controls remain available.

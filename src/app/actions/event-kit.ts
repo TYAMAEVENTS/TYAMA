@@ -101,7 +101,7 @@ export async function buildEventKitDraftsAction(
         body: JSON.stringify(missing.map((draft, index) => ({
           host_id: user.id,
           event_id: eventId,
-          source_type: "ai",
+          source_type: "rules",
           item_type: draft.itemType,
           title: draft.title,
           content: draft.content,
