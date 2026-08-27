@@ -10,6 +10,12 @@ import { supabaseRest } from "@/lib/supabase/rest";
 const PRIVACY = ["host_only", "review_required", "public_allowed"] as const;
 const STATUSES = ["draft", "approved", "rejected", "used"] as const;
 
+export type MediaEventKitState = {
+  success?: boolean;
+  alreadyExists?: boolean;
+  error?: string;
+};
+
 async function hostContext(eventId: string) {
   const user = await requireUser();
   const accessToken = await getAccessToken();
@@ -76,31 +82,50 @@ export async function createEventKitItemFromAnswerAction(eventId: string, answer
   revalidatePath(`/events/${eventId}/responses`);
 }
 
-export async function createEventKitItemFromMediaAction(eventId: string, assetId: string) {
+export async function createEventKitItemFromMediaAction(
+  eventId: string,
+  assetId: string,
+  _previousState: MediaEventKitState,
+  _formData: FormData,
+): Promise<MediaEventKitState> {
+  void _previousState;
+  void _formData;
   const { user, accessToken } = await hostContext(eventId);
-  const assets = await supabaseRest<Array<{ id: string; kind: string; original_filename: string | null; privacy_status: string; moderation_status: string }>>(
-    `media_assets?select=id,kind,original_filename,privacy_status,moderation_status&id=eq.${assetId}&event_id=eq.${eventId}&status=eq.ready&limit=1`,
-    { accessToken },
-  );
-  const asset = assets[0];
-  if (!asset) return;
-  await supabaseRest("event_kit_items", {
-    method: "POST",
-    accessToken,
-    body: JSON.stringify({
-      host_id: user.id,
-      event_id: eventId,
-      source_type: "manual",
-      item_type: "media",
-      title: asset.original_filename || `${asset.kind} з анкети`,
-      content: "Медіа з відповіді. Перевірте privacy та moderation перед показом.",
-      source_refs: [{ type: "media_asset", id: asset.id }],
-      status: "draft",
-      privacy_status: "host_only",
-    }),
-  });
-  revalidatePath(`/events/${eventId}/event-kit`);
-  revalidatePath(`/events/${eventId}/responses`);
+  try {
+    const assets = await supabaseRest<Array<{ id: string; kind: string; original_filename: string | null; privacy_status: string; moderation_status: string }>>(
+      `media_assets?select=id,kind,original_filename,privacy_status,moderation_status&id=eq.${assetId}&event_id=eq.${eventId}&status=eq.ready&limit=1`,
+      { accessToken },
+    );
+    const asset = assets[0];
+    if (!asset) return { error: "Медіафайл не знайдено." };
+    const existing = await supabaseRest<Array<{ source_refs: Array<{ type?: string; id?: string }> | null }>>(
+      `event_kit_items?select=source_refs&event_id=eq.${eventId}&item_type=eq.media`,
+      { accessToken },
+    );
+    if (existing.some((item) => item.source_refs?.some((ref) => ref.type === "media_asset" && ref.id === asset.id))) {
+      return { success: true, alreadyExists: true };
+    }
+    await supabaseRest("event_kit_items", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({
+        host_id: user.id,
+        event_id: eventId,
+        source_type: "manual",
+        item_type: "media",
+        title: asset.original_filename || `${asset.kind} з анкети`,
+        content: "Медіа з відповіді. Перевірте privacy та moderation перед показом.",
+        source_refs: [{ type: "media_asset", id: asset.id }],
+        status: "draft",
+        privacy_status: "host_only",
+      }),
+    });
+    revalidatePath(`/events/${eventId}/event-kit`);
+    revalidatePath(`/events/${eventId}/responses`);
+    return { success: true };
+  } catch {
+    return { error: "Не вдалося додати медіа в Event Kit." };
+  }
 }
 
 export async function updateEventKitItemAction(eventId: string, itemId: string, formData: FormData) {

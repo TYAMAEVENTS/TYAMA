@@ -1,7 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
-import { createEventKitItemFromMediaAction } from "@/app/actions/event-kit";
-import { updateMediaModerationAction } from "@/app/actions/moderation";
+import { MediaReviewActions } from "@/components/media-review-actions";
 import type { MediaAsset } from "@/lib/media/types";
 
 function formatBytes(size: number) {
@@ -20,12 +18,7 @@ export function MediaReviewCard({ eventId, asset }: { eventId: string; asset: Me
         {asset.kind === "audio" ? <audio src={source} controls preload="metadata">Ваш браузер не підтримує аудіо.</audio> : null}
       </div> : <p className="status">Файл ще перевіряється або був відхилений.</p>}
       {asset.status === "ready" ? <div className="media-review-card__actions">
-        <form action={updateMediaModerationAction.bind(null, eventId, asset.id)} className="moderation-form">
-          <select name="privacy" defaultValue={asset.privacy_status} aria-label="Приватність медіа"><option value="host_only">Лише ведучий</option><option value="review_required">Після перевірки</option><option value="public_allowed">Можна у public</option></select>
-          <select name="moderation" defaultValue={asset.moderation_status} aria-label="Модерація медіа"><option value="pending">Очікує</option><option value="approved">Схвалено</option><option value="rejected">Відхилено</option></select>
-          <button className="text-action" type="submit">Зберегти медіа →</button>
-        </form>
-        <div className="inline-actions"><Link className="button button--neutral button--outline" href={`${source}?download=1`}>Завантажити</Link><form action={createEventKitItemFromMediaAction.bind(null, eventId, asset.id)}><button className="button button--neutral button--outline" type="submit">В Event Kit</button></form></div>
+        <MediaReviewActions asset={asset} eventId={eventId} downloadHref={`${source}?download=1`} />
       </div> : null}
     </article>
   );
