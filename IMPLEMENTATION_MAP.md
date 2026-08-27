@@ -50,6 +50,8 @@ Infrastructure applied: clean Supabase project, canonical migrations, 11 RLS-ena
 
 Media v1 implemented on 2026-08-27: questionnaire-level image/video/audio switches, capability-scoped signed uploads, private host preview/download, per-asset moderation, and Event Kit linkage. Public Screen never receives media automatically.
 
+Media v1 enforces the handoff limits at both UI and Postgres boundaries: 10 files, 200 MB total per submission, and 10/25/100 MB per image/audio/video file. The database total is checked under the existing submission-scoped advisory lock, so concurrent prepare requests cannot bypass it.
+
 Production Media v1 image QA passed on 2026-08-27 with one owner-approved synthetic submission: private upload and completion, owner-only signed preview/download, moderation refresh, duplicate-safe Event Kit linkage, Event Kit/Live privacy exclusion, foreign-user RLS isolation, and CSV/JSON/print backup. The asset remains `host_only + approved`; unauthenticated media read returns `401`. Physical mobile-device QA and real video/audio samples remain release gates.
 
 Smart Draft production QA passed on 2026-08-27: one host action creates separate context, story, interactive-preparation, and host-cheatsheet blocks from usable raw answers. Every generated item starts as `draft + host_only`, records source references, and has a stable generator key. Repeated runs create no duplicates. Identity/contact prompts are excluded from survey games; insufficient data produces an honest collection plan instead of invented scores.

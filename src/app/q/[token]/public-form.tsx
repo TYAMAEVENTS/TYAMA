@@ -23,8 +23,13 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
   function selectFiles(questionId: string, files: FileList | null) {
     const next = Array.from(files ?? []);
     const otherCount = Object.entries(selectedMedia).reduce((count, [key, current]) => key === questionId ? count : count + current.length, 0);
+    const otherBytes = Object.entries(selectedMedia).reduce((bytes, [key, current]) => key === questionId ? bytes : bytes + current.reduce((sum, file) => sum + file.size, 0), 0);
     if (otherCount + next.length > 10) {
       setMediaError("До однієї анкети можна додати максимум 10 файлів.");
+      return;
+    }
+    if (otherBytes + next.reduce((sum, file) => sum + file.size, 0) > 200 * 1024 * 1024) {
+      setMediaError("Загальний розмір файлів однієї анкети не може перевищувати 200 МБ.");
       return;
     }
     const invalid = next.find((file) => !acceptedMedia.split(",").includes(file.type)
