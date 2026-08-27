@@ -9,7 +9,6 @@ import { capabilityHash, questionnaireToken } from "@/lib/questionnaires/tokens"
 import {
   QUESTIONNAIRE_AUDIENCES,
   QUESTION_TYPES,
-  type Questionnaire,
   type QuestionnaireAudience,
   type Question,
   type QuestionType,
@@ -71,7 +70,7 @@ export async function createQuestionnaireAction(
   _: QuestionnaireActionState,
   formData: FormData,
 ): Promise<QuestionnaireActionState> {
-  const { user, accessToken } = await hostContext(eventId);
+  const { accessToken } = await hostContext(eventId);
   const audienceValue = String(formData.get("audience") ?? "guest");
   const audience = QUESTIONNAIRE_AUDIENCES.includes(audienceValue as QuestionnaireAudience)
     ? (audienceValue as QuestionnaireAudience)
@@ -80,32 +79,26 @@ export async function createQuestionnaireAction(
   if (!title) return { error: "Додайте назву анкети." };
 
   try {
-    const rows = await supabaseRest<Questionnaire[]>("questionnaires", {
-      method: "POST",
-      accessToken,
-      headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ host_id: user.id, event_id: eventId, audience, title, status: "draft" }),
-    });
-    const questionnaire = rows[0];
-    if (!questionnaire) return { error: "Анкету не створено. Спробуйте ще раз." };
-
-    const token = questionnaireToken(questionnaire.id);
-    await supabaseRest(`questionnaires?id=eq.${questionnaire.id}&event_id=eq.${eventId}`, {
-      method: "PATCH",
-      accessToken,
-      body: JSON.stringify({ public_token_hash: capabilityHash(token) }),
-    });
-
     const starterKey = audience === "guest" || audience === "other" ? "guest" : "customer";
     const questions = STARTERS[starterKey].map((question, index) => ({
       ...question,
-      host_id: user.id,
-      event_id: eventId,
-      questionnaire_id: questionnaire.id,
       sort_order: (index + 1) * 10,
     }));
-    await supabaseRest("questions", { method: "POST", accessToken, body: JSON.stringify(questions) });
-    return { questionnaireId: questionnaire.id };
+    const questionnaireId = crypto.randomUUID();
+    const createdQuestionnaireId = await supabaseRest<string>("rpc/create_questionnaire_with_questions_tx", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({
+        p_questionnaire_id: questionnaireId,
+        p_event_id: eventId,
+        p_audience: audience,
+        p_title: title,
+        p_public_token_hash: capabilityHash(questionnaireToken(questionnaireId)),
+        p_questions: questions,
+      }),
+    });
+    if (createdQuestionnaireId !== questionnaireId) return { error: "Анкету не створено. Спробуйте ще раз." };
+    return { questionnaireId: createdQuestionnaireId };
   } catch {
     return { error: "Анкету не створено. Введені дані лишилися у формі — спробуйте ще раз." };
   }
