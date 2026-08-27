@@ -148,12 +148,14 @@ export async function setQuestionnaireStatusAction(eventId: string, questionnair
   revalidatePath(pathFor(eventId));
 }
 
-export async function addQuestionAction(eventId: string, questionnaireId: string, formData: FormData) {
+export type AddQuestionState = { success?: boolean; error?: string };
+
+export async function addQuestionAction(eventId: string, questionnaireId: string, _state: AddQuestionState, formData: FormData): Promise<AddQuestionState> {
   const { user, accessToken } = await hostContext(eventId);
   const typeValue = String(formData.get("type") ?? "short_text");
   const type = QUESTION_TYPES.includes(typeValue as QuestionType) ? (typeValue as QuestionType) : "short_text";
   const prompt = String(formData.get("prompt") ?? "").trim().slice(0, 1000);
-  if (!prompt) redirect(`${pathFor(eventId, questionnaireId)}?error=question-prompt`);
+  if (!prompt) return { error: "Додайте текст питання." };
   const current = await supabaseRest<Array<Pick<Question, "sort_order">>>(
     `questions?select=sort_order&questionnaire_id=eq.${questionnaireId}&event_id=eq.${eventId}&order=sort_order.desc&limit=1`,
     { accessToken },
@@ -172,7 +174,7 @@ export async function addQuestionAction(eventId: string, questionnaireId: string
       default_privacy: "review_required",
     }),
   });
-  revalidatePath(pathFor(eventId, questionnaireId));
+  return { success: true };
 }
 
 export async function updateQuestionAction(eventId: string, questionnaireId: string, questionId: string, formData: FormData) {

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  addQuestionAction,
   moveQuestionAction,
   setQuestionnaireStatusAction,
   updateQuestionAction,
@@ -14,6 +13,7 @@ import { getEvent } from "@/lib/events/data";
 import { getQuestionnaire, listQuestions } from "@/lib/questionnaires/data";
 import { publicQuestionnaireUrl } from "@/lib/questionnaires/tokens";
 import { AUDIENCE_LABELS, QUESTION_TYPE_LABELS } from "@/lib/questionnaires/types";
+import { QuestionAddForm } from "./question-add-form";
 
 export const metadata: Metadata = { title: "Редактор анкети" };
 
@@ -104,11 +104,7 @@ export default async function QuestionnaireEditorPage({
 
       <section className="add-question-panel">
         <span className="eyebrow">ДОДАТИ ПИТАННЯ</span>
-        <form action={addQuestionAction.bind(null, eventId, questionnaireId)} className="editor-form">
-          <div className="form-field"><label className="form-field__label" htmlFor="new-prompt">Текст питання</label><textarea id="new-prompt" name="prompt" required /></div>
-          <div className="form-grid"><div className="form-field"><label className="form-field__label" htmlFor="new-type">Тип</label><select id="new-type" name="type"><option value="short_text">Коротка відповідь</option><option value="long_text">Розгорнута відповідь</option><option value="boolean">Так / ні</option><option value="single_select">Один варіант</option><option value="multi_select">Кілька варіантів</option><option value="media">Фото / відео / аудіо</option></select></div><label className="checkbox-field"><input type="checkbox" name="isRequired" /> Обов’язкове</label></div>
-          <button className="button button--brand button--solid" type="submit">Додати питання</button>
-        </form>
+        <QuestionAddForm eventId={eventId} questionnaireId={questionnaireId} />
       </section>
     </AppShell>
   );
