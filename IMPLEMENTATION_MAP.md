@@ -48,6 +48,8 @@ Implemented and production-building: Auth shell, Host Dashboard, Event creation/
 
 Infrastructure applied: clean Supabase project, canonical migrations, 11 RLS-enabled application tables, private Storage bucket, and active `public-api` Edge Function. Security advisor has one Auth-level warning: leaked-password protection is disabled.
 
-Media v1 implemented on 2026-08-27: questionnaire-level image/video/audio switches, capability-scoped signed uploads, private host preview/download, per-asset moderation, and Event Kit linkage. Public Screen never receives media automatically. Production mobile upload/read/privacy QA remains a release gate.
+Media v1 implemented on 2026-08-27: questionnaire-level image/video/audio switches, capability-scoped signed uploads, private host preview/download, per-asset moderation, and Event Kit linkage. Public Screen never receives media automatically.
 
-External release gates: enable Supabase leaked-password protection, finish Media v1 production mobile QA, and complete the remaining pilot acceptance checks. The Host Auth user, GitHub remote, production alias, and core two-Event isolation checks are complete.
+Production Media v1 image QA passed on 2026-08-27 with one owner-approved synthetic submission: private upload and completion, owner-only signed preview/download, moderation refresh, duplicate-safe Event Kit linkage, Event Kit/Live privacy exclusion, foreign-user RLS isolation, and CSV/JSON/print backup. The asset remains `host_only + approved`; unauthenticated media read returns `401`. Physical mobile-device QA and real video/audio samples remain release gates.
+
+External release gates: enable Supabase leaked-password protection, finish Media v1 physical mobile/video/audio QA, and complete the remaining pilot acceptance checks. The Host Auth user, GitHub remote, production alias, image upload/read/privacy QA, exports, and core two-Event isolation checks are complete.
