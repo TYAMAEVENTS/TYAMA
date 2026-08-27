@@ -6,7 +6,6 @@ import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import type { EventKitItem } from "@/lib/event-kit/types";
 import { getActiveLiveSession, getHostLiveState } from "@/lib/live/data";
-import type { LiveSession } from "@/lib/live/types";
 import { capabilityHash, publicScreenToken } from "@/lib/questionnaires/tokens";
 import { supabaseRest } from "@/lib/supabase/rest";
 
@@ -25,43 +24,14 @@ function refreshLiveRoutes(eventId: string) {
 }
 
 export async function startLiveSessionAction(eventId: string, mode: "rehearsal" | "live") {
-  const { user, accessToken } = await hostContext(eventId);
-  const existing = await getActiveLiveSession(eventId);
-  if (existing) {
-    await supabaseRest(`live_sessions?id=eq.${existing.id}&event_id=eq.${eventId}`, {
-      method: "PATCH", accessToken, body: JSON.stringify({ status: "ended", ended_at: new Date().toISOString() }),
-    });
-  }
-  const sessions = await supabaseRest<LiveSession[]>("live_sessions", {
+  const { accessToken } = await hostContext(eventId);
+  await supabaseRest<string>("rpc/start_live_session_tx", {
     method: "POST",
     accessToken,
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ host_id: user.id, event_id: eventId, mode, status: "active" }),
-  });
-  const session = sessions[0];
-  if (!session) throw new Error("Session was not created");
-  const current = await getHostLiveState(eventId);
-  const nextState = {
-    host_id: user.id,
-    event_id: eventId,
-    live_session_id: session.id,
-    revision: (current?.revision ?? 0) + 1,
-    mode: "clear",
-    source_event_kit_item_id: null,
-    public_payload: { kind: "clear", session_mode: mode },
-  };
-  if (current) {
-    await supabaseRest(`live_state?event_id=eq.${eventId}`, { method: "PATCH", accessToken, body: JSON.stringify(nextState) });
-  } else {
-    await supabaseRest("live_state", { method: "POST", accessToken, body: JSON.stringify(nextState) });
-  }
-  await supabaseRest(`events?id=eq.${eventId}`, {
-    method: "PATCH",
-    accessToken,
     body: JSON.stringify({
-      public_screen_enabled: true,
-      public_screen_token_hash: capabilityHash(publicScreenToken(eventId)),
-      status: mode === "live" ? "live" : "preparing",
+      p_event_id: eventId,
+      p_mode: mode,
+      p_public_screen_token_hash: capabilityHash(publicScreenToken(eventId)),
     }),
   });
   refreshLiveRoutes(eventId);
@@ -112,16 +82,10 @@ export async function clearPublicScreenAction(eventId: string) {
 
 export async function endLiveSessionAction(eventId: string) {
   const { accessToken } = await hostContext(eventId);
-  const [session, current] = await Promise.all([getActiveLiveSession(eventId), getHostLiveState(eventId)]);
-  if (!session) return;
-  await supabaseRest(`live_sessions?id=eq.${session.id}&event_id=eq.${eventId}`, {
-    method: "PATCH", accessToken, body: JSON.stringify({ status: "ended", ended_at: new Date().toISOString() }),
+  await supabaseRest<boolean>("rpc/end_live_session_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ p_event_id: eventId }),
   });
-  if (current) {
-    await supabaseRest(`live_state?event_id=eq.${eventId}`, {
-      method: "PATCH", accessToken, body: JSON.stringify({ live_session_id: null, revision: current.revision + 1, mode: "clear", source_event_kit_item_id: null, public_payload: { kind: "clear" } }),
-    });
-  }
-  await supabaseRest(`events?id=eq.${eventId}`, { method: "PATCH", accessToken, body: JSON.stringify({ status: "ready" }) });
   refreshLiveRoutes(eventId);
 }
