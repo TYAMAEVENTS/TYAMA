@@ -34,7 +34,7 @@ export function AnswerReviewActions({ eventId, answerId, privacy, moderation, is
 
   return (
     <>
-      <form action={moderationAction} className="moderation-form">
+      <form action={moderationAction} className="moderation-form" noValidate>
         <select name="privacy" defaultValue={privacy} aria-label="Приватність"><option value="host_only">Лише ведучий</option><option value="review_required">Після перевірки</option><option value="public_allowed">Можна у public</option></select>
         <select name="moderation" defaultValue={moderation} aria-label="Модерація"><option value="pending">Очікує</option><option value="approved">Схвалено</option><option value="rejected">Відхилено</option></select>
         <label><input type="checkbox" name="isUseful" defaultChecked={isUseful} /> Корисне</label>
@@ -43,7 +43,7 @@ export function AnswerReviewActions({ eventId, answerId, privacy, moderation, is
       </form>
       {moderationState.error ? <p className="status status--error">{moderationState.error}</p> : null}
       {moderationState.success ? <p className="status">Статус відповіді збережено.</p> : null}
-      <form action={eventKitAction}><button className="button button--neutral button--outline" type="submit" disabled={eventKitPending}>{eventKitPending ? "Додаємо…" : "Додати в Event Kit"}</button></form>
+      <form action={eventKitAction} noValidate><button className="button button--neutral button--outline" type="submit" disabled={eventKitPending}>{eventKitPending ? "Додаємо…" : "Додати в Event Kit"}</button></form>
       {eventKitState.error ? <p className="status status--error">{eventKitState.error}</p> : null}
       {eventKitState.success ? <p className="status">{eventKitState.alreadyExists ? "Ця відповідь уже є в Event Kit." : "Відповідь додано в Event Kit."}</p> : null}
     </>

@@ -61,6 +61,14 @@ export function fetchAuthUser(accessToken: string) {
   });
 }
 
+export function updateAuthUserPassword(accessToken: string, password: string) {
+  return authFetch<{ user: AuthUser }>("/user", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ password }),
+  });
+}
+
 export async function revokeSession(accessToken: string) {
   const { url, publishableKey } = publicSupabaseEnv();
   await fetch(`${url}/auth/v1/logout?scope=local`, {

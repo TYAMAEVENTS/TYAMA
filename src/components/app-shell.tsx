@@ -11,9 +11,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <BrandMark compact />
         </Link>
         <div className="app-header__statement">РОЗРІЗНЕНЕ<br />СТАЄ ЗРОЗУМІЛИМ</div>
-        <form action={logoutAction}>
-          <button className="text-action" type="submit">Вийти</button>
-        </form>
+        <nav className="app-header__actions" aria-label="Акаунт">
+          <Link href="/account" className="text-action">Акаунт</Link>
+          <form action={logoutAction} noValidate><button className="text-action" type="submit">Вийти</button></form>
+        </nav>
       </header>
       <main className="app-main">{children}</main>
     </div>

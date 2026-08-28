@@ -35,7 +35,7 @@ export default async function EventWorkspacePage({ params }: { params: Promise<{
           <h1>{event.title}</h1>
           <p>{event.client_name || "Клієнти ще не вказані"} · {formatEventDate(event.event_date)}</p>
         </div>
-        <div className="event-hero__signal"><span />КОНТЕКСТ<br />ЗБИРАЄТЬСЯ</div>
+        <div className="event-hero__tools"><div className="event-hero__signal"><span />КОНТЕКСТ<br />ЗБИРАЄТЬСЯ</div><Link className="button button--neutral button--outline" href={`/events/${event.id}/settings`}>Налаштування</Link></div>
       </header>
 
       <section className="workspace-grid" aria-label="Розділи події">

@@ -2,8 +2,10 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { signInWithPassword, revokeSession } from "@/lib/auth/api";
+import { signInWithPassword, revokeSession, updateAuthUserPassword } from "@/lib/auth/api";
 import { AUTH_COOKIES, AUTH_COOKIE_OPTIONS } from "@/lib/auth/constants";
+import { getAccessToken, requireUser } from "@/lib/auth/session";
+import { supabaseRest } from "@/lib/supabase/rest";
 
 export type LoginState = { error?: string };
 
@@ -46,4 +48,40 @@ export async function logoutAction() {
   cookieStore.delete(AUTH_COOKIES.refresh);
   cookieStore.delete(AUTH_COOKIES.expiresAt);
   redirect("/login");
+}
+
+export type AccountState = { success?: string; error?: string };
+
+export async function updateProfileAction(_: AccountState, formData: FormData): Promise<AccountState> {
+  const user = await requireUser();
+  const accessToken = await getAccessToken();
+  if (!accessToken) redirect("/login");
+  const displayName = String(formData.get("displayName") ?? "").trim().slice(0, 160);
+  if (!displayName) return { error: "Вкажіть ім’я, яке показувати у кабінеті." };
+  try {
+    await supabaseRest(`profiles?id=eq.${encodeURIComponent(user.id)}`, {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ display_name: displayName }),
+    });
+    return { success: "Ім’я збережено." };
+  } catch {
+    return { error: "Ім’я не збережено. Спробуйте ще раз." };
+  }
+}
+
+export async function changePasswordAction(_: AccountState, formData: FormData): Promise<AccountState> {
+  await requireUser();
+  const accessToken = await getAccessToken();
+  if (!accessToken) redirect("/login");
+  const password = String(formData.get("password") ?? "");
+  const confirmation = String(formData.get("passwordConfirmation") ?? "");
+  if (password.length < 12) return { error: "Новий пароль має містити щонайменше 12 символів." };
+  if (password !== confirmation) return { error: "Паролі не збігаються." };
+  try {
+    await updateAuthUserPassword(accessToken, password);
+    return { success: "Пароль змінено. Інші значення полів очищено." };
+  } catch {
+    return { error: "Пароль не змінено. Увійдіть у кабінет заново й повторіть дію." };
+  }
 }

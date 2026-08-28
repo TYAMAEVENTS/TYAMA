@@ -2,15 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { requireUser } from "@/lib/auth/session";
-import { listEvents } from "@/lib/events/data";
+import { getEventSubmissionCounts, listEvents } from "@/lib/events/data";
 import { EVENT_TYPE_LABELS } from "@/lib/events/types";
 import { formatEventDate } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Події" };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ archived?: string }> }) {
   await requireUser();
-  const events = await listEvents();
+  const showArchived = (await searchParams).archived === "1";
+  const [events, submissionCounts] = await Promise.all([listEvents(showArchived), getEventSubmissionCounts()]);
 
   return (
     <AppShell>
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
           <span className="eyebrow">HOST / DASHBOARD</span>
           <h1>Події</h1>
         </div>
-        <Link href="/events/new" className="button button--brand button--solid">Створити подію</Link>
+        <div className="inline-actions"><Link href={showArchived ? "/dashboard" : "/dashboard?archived=1"} className="button button--neutral button--outline">{showArchived ? "Лише активні" : "Разом з архівом"}</Link><Link href="/events/new" className="button button--brand button--solid">Створити подію</Link></div>
       </div>
 
       {events.length === 0 ? (
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
                 <p>{event.client_name || "Клієнт ще не вказаний"}</p>
               </div>
               <div className="event-row__meta">
-                <span>{formatEventDate(event.event_date)}</span>
+                <span>{formatEventDate(event.event_date)}<br />Відповідей: {submissionCounts.get(event.id) ?? 0}</span>
                 <Link href={`/events/${event.id}`} className="text-action">Відкрити →</Link>
               </div>
             </article>

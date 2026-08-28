@@ -30,7 +30,7 @@ export function PublicScreen({ initialState, token }: { initialState: PublicScre
   const cleared = state.mode === "idle" || state.mode === "clear" || payload.kind === "clear";
   return (
     <main className={`screen-page screen-page--${state.mode}`}>
-      <header className="screen-header"><span>ТЯМА × СВЯТ ГАЛЮК</span><span>{payload.session_mode === "rehearsal" ? "РЕПЕТИЦІЯ" : state.event_title}</span></header>
+      <header className="screen-header"><span>ТЯМА / LIVE CONTEXT</span><span>{payload.session_mode === "rehearsal" ? "РЕПЕТИЦІЯ" : state.event_title}</span></header>
       <section className="screen-stage" aria-live="polite">
         {cleared ? <div className="screen-idle"><span className="screen-idle__signal" /><h1>ТЯМА</h1><p>Контекст уже збирається.</p></div> : <div className="screen-content"><span className="eyebrow">{payload.item_type || state.mode}</span>{payload.title ? <h1>{payload.title}</h1> : null}{payload.content ? <p>{payload.content}</p> : null}</div>}
       </section>

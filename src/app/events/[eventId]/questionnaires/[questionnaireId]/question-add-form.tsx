@@ -20,9 +20,9 @@ export function QuestionAddForm({ eventId, questionnaireId }: { eventId: string;
   }, [router, state]);
 
   return (
-    <form action={action} className="editor-form" ref={formRef}>
+    <form action={action} className="editor-form" ref={formRef} noValidate>
       {state.error ? <StatusMessage tone="error">{state.error}</StatusMessage> : null}
-      <div className="form-field"><label className="form-field__label" htmlFor="new-prompt">Текст питання</label><textarea id="new-prompt" name="prompt" required /></div>
+      <div className="form-field"><label className="form-field__label" htmlFor="new-prompt">Текст питання</label><textarea className="resize-none" id="new-prompt" name="prompt" required /></div>
       <div className="form-grid"><div className="form-field"><label className="form-field__label" htmlFor="new-type">Тип</label><select id="new-type" name="type"><option value="short_text">Коротка відповідь</option><option value="long_text">Розгорнута відповідь</option><option value="boolean">Так / ні</option><option value="single_select">Один варіант</option><option value="multi_select">Кілька варіантів</option><option value="media">Фото / відео / аудіо</option></select></div><label className="checkbox-field"><input type="checkbox" name="isRequired" /> Обов’язкове</label></div>
       <Button type="submit" busy={pending}>Додати питання</Button>
     </form>

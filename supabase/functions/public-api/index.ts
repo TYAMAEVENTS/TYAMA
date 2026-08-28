@@ -71,6 +71,13 @@ Deno.serve(async (request: Request) => {
     const displayName = String(body.display_name ?? "");
     const answers = body.answers;
     if (!/^[0-9a-f]{64}$/.test(tokenHash) || !/^[0-9a-f]{64}$/.test(idempotencyHash)) return json({ error: "Invalid request" }, 400);
+    const { data: allowed, error: limitError } = await admin.rpc("consume_public_submission_limit", {
+      p_questionnaire_token_hash: tokenHash,
+      p_limit: 300,
+      p_window_seconds: 900,
+    });
+    if (limitError) return json({ error: "Submission temporarily unavailable" }, 503);
+    if (!allowed) return json({ error: "Too many submissions. Try again later." }, 429);
     const { data, error } = await admin.rpc("submit_questionnaire", {
       p_questionnaire_token_hash: tokenHash,
       p_idempotency_key_hash: idempotencyHash,

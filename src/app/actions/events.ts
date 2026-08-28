@@ -10,6 +10,23 @@ export type CreateEventState = {
   fields?: { title?: string; clientName?: string; eventDate?: string; eventType?: string; location?: string };
 };
 
+export type UpdateEventState = {
+  success?: boolean;
+  error?: string;
+};
+
+async function ownedEventContext(eventId: string) {
+  const user = await requireUser();
+  const accessToken = await getAccessToken();
+  if (!accessToken) redirect("/login");
+  const rows = await supabaseRest<Array<Pick<TyamaEvent, "id" | "host_id">>>(
+    `events?select=id,host_id&id=eq.${encodeURIComponent(eventId)}&limit=1`,
+    { accessToken },
+  );
+  if (!rows[0] || rows[0].host_id !== user.id) throw new Error("Event not found");
+  return { accessToken };
+}
+
 export async function createEventAction(_: CreateEventState, formData: FormData): Promise<CreateEventState> {
   const user = await requireUser();
   const accessToken = await getAccessToken();
@@ -51,4 +68,45 @@ export async function createEventAction(_: CreateEventState, formData: FormData)
 
   if (!event) return { error: "Подію не створено. Спробуйте ще раз.", fields };
   redirect(`/events/${event.id}`);
+}
+
+export async function updateEventAction(
+  eventId: string,
+  _: UpdateEventState,
+  formData: FormData,
+): Promise<UpdateEventState> {
+  const { accessToken } = await ownedEventContext(eventId);
+  const title = String(formData.get("title") ?? "").trim().slice(0, 160);
+  const eventType = String(formData.get("eventType") ?? "");
+  if (!title) return { error: "Додайте назву події." };
+  if (!EVENT_TYPES.includes(eventType as (typeof EVENT_TYPES)[number])) {
+    return { error: "Оберіть тип події." };
+  }
+  try {
+    await supabaseRest(`events?id=eq.${encodeURIComponent(eventId)}`, {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({
+        title,
+        event_type: eventType,
+        client_name: String(formData.get("clientName") ?? "").trim().slice(0, 300) || null,
+        event_date: String(formData.get("eventDate") ?? "") || null,
+        location: String(formData.get("location") ?? "").trim().slice(0, 500) || null,
+        internal_notes: String(formData.get("internalNotes") ?? "").trim().slice(0, 5000) || null,
+      }),
+    });
+    return { success: true };
+  } catch {
+    return { error: "Зміни не збережено. Введені дані залишилися у формі — спробуйте ще раз." };
+  }
+}
+
+export async function setEventArchivedAction(eventId: string, archived: boolean) {
+  const { accessToken } = await ownedEventContext(eventId);
+  await supabaseRest(`events?id=eq.${encodeURIComponent(eventId)}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ status: archived ? "archived" : "draft" }),
+  });
+  redirect(archived ? "/dashboard" : `/events/${eventId}`);
 }

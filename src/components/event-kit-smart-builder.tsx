@@ -17,7 +17,7 @@ export function EventKitSmartBuilder({ eventId }: { eventId: string }) {
   }, [router, state.success]);
 
   return (
-    <form action={action} className="editor-form">
+    <form action={action} className="editor-form" noValidate>
       <p>Збере окремі робочі блоки з відповідей. Нічого не публікується автоматично.</p>
       {state.error ? <StatusMessage tone="error">{state.error}</StatusMessage> : null}
       {state.success ? <StatusMessage>{state.created

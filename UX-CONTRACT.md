@@ -2,17 +2,17 @@
 
 Visual source: `DESIGN.md`. Business and security sources: handoff `02`, `03`, `04`, `12`, `14`, and `08`.
 
-## Canonical ownership
+## Canonical UI Map
 
-| Capability | Owner | Decision |
-|---|---|---|
-| Form | shared field primitives + server action result | `noValidate`, submit then correct, inline + form error, first-invalid focus |
-| Select/Listbox | native for Pilot | platform popup accepted; no CSS claim over open popup |
-| Date | native date-only | platform picker accepted; database stores `date` without timezone conversion |
-| Toast/status | shared live status region | stable placement, action-aligned Ukrainian copy, no raw backend errors |
-| CRUD | server actions + route helpers | create returns to owning Event workspace; edits stay in context |
-| Scrollbar | global stylesheet | visible tokenized baseline, no opt-in class |
-| Dataset navigation | server pagination when unbounded | URL state; bounded small lists may render all |
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| Form | shared field primitives + server-action result | `src/components/ui`, this contract | create, inline edit, public submit | `noValidate`, persistent error, stable busy state |
+| Select/Listbox | native `<select>` | `premium-ui.json` | single, multiple | keyboard, mobile platform popup, Ukrainian options |
+| Date | native date-only input | `premium-ui.json` | optional event date | browser locale; Postgres `date` without timezone conversion |
+| Toast | `StatusMessage` and persistent status region | `src/components/ui/status.tsx` | info, success, error | stable placement, Ukrainian copy, no raw backend errors |
+| CRUD | authenticated server actions + route helpers | RLS migrations and `src/app/actions` | create, inline edit, reversible archive | owner-only mutation, recovery, post-save destination |
+| Scrollbar | global stylesheet | `src/app/globals.css` | root and nested overflow | Firefox + WebKit + forced colors |
+| Dataset navigation | route-backed bounded lists | API/RLS query contracts | render-all for Pilot; pagination when unbounded | narrow viewport, empty state, Back/refresh |
 
 ## Behavior ledger
 
@@ -21,13 +21,13 @@ Visual source: `DESIGN.md`. Business and security sources: handoff `02`, `03`, `
 | Create Event | `Створити подію` | stable busy button | new Event workspace | persistent form error | page title / first invalid field |
 | Save edit | `Зберегти зміни` | stable busy button | stay in context + status | inline + summary | updated heading / first invalid |
 | Publish | `Опублікувати` | pessimistic | stay + public-link state | persistent panel error | status region |
-| Archive | `Архівувати` | warning confirmation | dashboard | dialog error | next Event/dashboard heading |
+| Archive | `Архівувати` | pessimistic server action | dashboard + restore path | persistent error | next Event/dashboard heading |
 | Public submit | `Надіслати відповіді` | idempotent busy | clear success state | preserve entered data | error summary / success heading |
 
 ## Security and privacy UI
 
 - UI hiding never replaces server/RLS authorization.
-- Authenticated cross-owner access renders 403; missing resources render 404.
+- Authenticated cross-owner Event capability URLs deliberately render 404 to avoid confirming resource existence.
 - Public Screen never exposes raw answers, internal notes, contacts, or full Event Kit rows.
 - Privacy changes are pessimistic and visible; public exposure requires approved + public_allowed + explicit live selection.
 - Hard delete is absent from Pilot UI. Events are archived.

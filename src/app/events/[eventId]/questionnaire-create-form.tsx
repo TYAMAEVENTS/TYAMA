@@ -23,7 +23,7 @@ export function QuestionnaireCreateForm({ eventId }: { eventId: string }) {
   }, [eventId, router, state.questionnaireId]);
 
   return (
-    <form action={action} className="editor-form">
+    <form action={action} className="editor-form" noValidate>
       {state.error ? <div className="status status--error">{state.error}</div> : null}
       <div className="form-field">
         <label className="form-field__label" htmlFor="questionnaire-title">Назва</label>

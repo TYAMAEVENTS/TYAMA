@@ -1,0 +1,13 @@
+{
+  "findings": [],
+  "mode": "strict",
+  "projectRoot": "/workspace/scratch/3d733385eca6/tyama-media",
+  "schemaVersion": 1,
+  "summary": {
+    "errors": 0,
+    "total": 0,
+    "unresolved": 0,
+    "violations": 0,
+    "warnings": 0
+  }
+}

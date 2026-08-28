@@ -14,6 +14,7 @@ import { getQuestionnaire, listQuestions } from "@/lib/questionnaires/data";
 import { publicQuestionnaireUrl } from "@/lib/questionnaires/tokens";
 import { AUDIENCE_LABELS, QUESTION_TYPE_LABELS } from "@/lib/questionnaires/types";
 import { QuestionAddForm } from "./question-add-form";
+import { ShareTools } from "@/components/share-tools";
 
 export const metadata: Metadata = { title: "Редактор анкети" };
 
@@ -58,9 +59,9 @@ export default async function QuestionnaireEditorPage({
       {error && ERRORS[error] ? <div className="status status--error">{ERRORS[error]}</div> : null}
 
       <section className="questionnaire-settings">
-        <form action={updateQuestionnaireAction.bind(null, eventId, questionnaireId)} className="editor-form">
+        <form action={updateQuestionnaireAction.bind(null, eventId, questionnaireId)} className="editor-form" noValidate>
           <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-title">Назва</label><input id="questionnaire-title" name="title" defaultValue={questionnaire.title} required /></div>
-          <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-description">Вступний текст</label><textarea id="questionnaire-description" name="description" defaultValue={questionnaire.description ?? ""} /></div>
+          <div className="form-field"><label className="form-field__label" htmlFor="questionnaire-description">Вступний текст</label><textarea className="resize-none" id="questionnaire-description" name="description" defaultValue={questionnaire.description ?? ""} /></div>
           <fieldset className="media-permissions"><legend>Що можна завантажувати</legend><label><input type="checkbox" name="allowImages" defaultChecked={questionnaire.allow_images} /> Фото до 10 МБ</label><label><input type="checkbox" name="allowVideo" defaultChecked={questionnaire.allow_video} /> Відео до 100 МБ</label><label><input type="checkbox" name="allowAudio" defaultChecked={questionnaire.allow_audio} /> Аудіо до 25 МБ</label></fieldset>
           <button className="button button--neutral button--outline" type="submit">Зберегти налаштування</button>
         </form>
@@ -68,11 +69,11 @@ export default async function QuestionnaireEditorPage({
         <div className="publish-panel">
           <span className={`state-chip state-chip--${questionnaire.status}`}>{questionnaire.status}</span>
           <p>{questionnaire.status === "published" ? "Посилання активне. Нові відповіді приймаються." : questionnaire.status === "closed" ? "Анкета закрита. Наявні відповіді збережено." : "Анкету бачить лише ведучий."}</p>
-          {questionnaire.status === "published" ? <div className="share-link"><code>{publicUrl}</code></div> : null}
+          {questionnaire.status === "published" ? <ShareTools url={publicUrl} /> : null}
           <div className="inline-actions">
-            {questionnaire.status !== "published" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "published")}><button className="button button--brand button--solid" type="submit">Опублікувати</button></form> : null}
-            {questionnaire.status === "published" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "closed")}><button className="button button--neutral button--outline" type="submit">Закрити прийом</button></form> : null}
-            {questionnaire.status === "closed" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "draft")}><button className="button button--neutral button--outline" type="submit">Повернути в чернетку</button></form> : null}
+            {questionnaire.status !== "published" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "published")} noValidate><button className="button button--brand button--solid" type="submit">Опублікувати</button></form> : null}
+            {questionnaire.status === "published" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "closed")} noValidate><button className="button button--neutral button--outline" type="submit">Закрити прийом</button></form> : null}
+            {questionnaire.status === "closed" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "draft")} noValidate><button className="button button--neutral button--outline" type="submit">Повернути в чернетку</button></form> : null}
           </div>
         </div>
       </section>
@@ -82,10 +83,10 @@ export default async function QuestionnaireEditorPage({
         {questions.map((question, index) => (
           <article className={`question-card ${question.is_active ? "" : "question-card--inactive"}`} key={question.id}>
             <div className="question-card__index">{String(index + 1).padStart(2, "0")}</div>
-            <form action={updateQuestionAction.bind(null, eventId, questionnaireId, question.id)} className="question-card__form">
+            <form action={updateQuestionAction.bind(null, eventId, questionnaireId, question.id)} className="question-card__form" noValidate>
               <input type="hidden" name="type" value={question.type} />
               <div className="question-card__meta"><span>{QUESTION_TYPE_LABELS[question.type]}</span><span>{question.default_privacy}</span></div>
-              <div className="form-field"><label className="form-field__label" htmlFor={`prompt-${question.id}`}>Питання</label><textarea id={`prompt-${question.id}`} name="prompt" defaultValue={question.prompt} required /></div>
+              <div className="form-field"><label className="form-field__label" htmlFor={`prompt-${question.id}`}>Питання</label><textarea className="resize-none" id={`prompt-${question.id}`} name="prompt" defaultValue={question.prompt} required /></div>
               <div className="form-field"><label className="form-field__label" htmlFor={`help-${question.id}`}>Підказка</label><input id={`help-${question.id}`} name="helpText" defaultValue={question.help_text ?? ""} /></div>
               <div className="question-options">
                 <label><input type="checkbox" name="isRequired" defaultChecked={question.is_required} /> Обов’язкове</label>
@@ -95,8 +96,8 @@ export default async function QuestionnaireEditorPage({
               <button className="text-action" type="submit">Зберегти питання →</button>
             </form>
             <div className="question-card__order" aria-label="Змінити порядок">
-              <form action={moveQuestionAction.bind(null, eventId, questionnaireId, question.id, "up")}><button type="submit" disabled={index === 0} aria-label="Перемістити вище">↑</button></form>
-              <form action={moveQuestionAction.bind(null, eventId, questionnaireId, question.id, "down")}><button type="submit" disabled={index === questions.length - 1} aria-label="Перемістити нижче">↓</button></form>
+              <form action={moveQuestionAction.bind(null, eventId, questionnaireId, question.id, "up")} noValidate><button type="submit" disabled={index === 0} aria-label="Перемістити вище">↑</button></form>
+              <form action={moveQuestionAction.bind(null, eventId, questionnaireId, question.id, "down")} noValidate><button type="submit" disabled={index === questions.length - 1} aria-label="Перемістити нижче">↓</button></form>
             </div>
           </article>
         ))}

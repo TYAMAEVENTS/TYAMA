@@ -79,3 +79,15 @@ Failure-case simulations passed on 2026-08-27: sequential rapid submit with one 
 Event ownership scope became immutable at the database boundary on 2026-08-28. A direct authenticated tampering simulation showed that RLS alone allowed an owner to reassign an Event Kit row between two Events owned by the same Host. Update triggers now reject changes to `host_id`/`event_id` across every Event-scoped table and reject Event `host_id` reassignment, closing this cross-Event mutation class independently of UI filters.
 
 External release gates: enable Supabase leaked-password protection, finish Media v1 physical mobile/video/audio QA, perform the final logged-in UI click-through for transactional questionnaire creation, Live, and Auto Slideshow, and complete the remaining pilot acceptance checks. The Host Auth user, GitHub remote, production alias, Smart Draft flow, image upload/read/privacy QA, exports, transactional questionnaire/Live data boundaries, and core two-Event isolation checks are complete.
+
+## Product-completion checkpoint — 2026-08-28
+
+Host operations now include editable Event details and private notes, a reversible archive/restore path, archived-list visibility, a separate Account screen, editable profile name, and authenticated password change. Dashboard Event rows now show real submitted-response counts.
+
+Published questionnaires now expose working copy/open/download controls and a generated PNG QR code. Public long-form answers auto-save locally with explicit local-only wording, restore after reload, exclude file objects, and retain the submission idempotency key so an uncertain mobile response cannot become a duplicate after refresh. Public copy is host-neutral and works for both isolated Host accounts.
+
+The browser security baseline now includes a restrictive production Content Security Policy scoped to the app and its configured Supabase origin. Public submission flood protection is active in `public-api` v4: each published questionnaire has an atomic 300 submissions / 15 minute ceiling. The private counter rejects unknown capabilities, stores no guest IP address, and is executable only by `service_role`; `anon` and `authenticated` have no grant.
+
+The product/admin strict UX audit now passes with zero findings. Canonical form validation ownership, textarea behavior, archive semantics, resource non-disclosure, QR/share behavior, and responsive account/Event settings layouts are recorded in `UX-CONTRACT.md`.
+
+Outstanding external gates are intentionally not mislabeled as code defects: Supabase Auth currently reports open signup and must be switched off in Dashboard to enforce the two-user allowlist; leaked-password protection remains plan-gated; physical iPhone/Android photo/video/audio and venue display/HDMI checks require real devices; real AI generation requires an explicitly configured server-side model key. Deterministic Smart Draft and every manual operational fallback remain available without AI.
