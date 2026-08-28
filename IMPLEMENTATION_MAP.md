@@ -68,6 +68,8 @@ Live screen controls became transactional on 2026-08-27. Show and clear operatio
 
 Questionnaire creation became transactional on 2026-08-27. The questionnaire, deterministic public capability hash, and complete 4/23-question starter set are now written by one RLS-respecting `SECURITY INVOKER` RPC. A rollback acceptance test confirmed complete creation for the owner, zero persisted QA rows, and denial for a foreign authenticated UUID; `anon` and `PUBLIC` have no execute grant.
 
+Question reordering became transactional on 2026-08-28. Adjacent swaps now run in one `SECURITY INVOKER` RPC under a questionnaire row lock; ownership and Event/questionnaire membership are re-checked in Postgres, and list boundaries return a harmless no-op instead of issuing partial PATCH requests.
+
 Production privacy headers were hardened on 2026-08-27: capability URLs are never sent as referrers, the Pilot is excluded from indexing/archiving, framing is denied, MIME sniffing is disabled, and cross-origin opener isolation is enabled. A restrictive CSP remains intentionally deferred until direct signed-upload behavior is covered by physical mobile media QA.
 
 Battle Backup was aligned with the handoff safety contract on 2026-08-27: CSV includes media IDs and filenames, JSON includes the active Live session and canonical Live state, and the printable Event Kit contains only approved/used program blocks plus a separate visible do-not-use/warning section. Drafts no longer silently enter the offline run sheet.

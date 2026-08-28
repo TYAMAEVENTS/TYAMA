@@ -191,18 +191,15 @@ export async function updateQuestionAction(eventId: string, questionnaireId: str
 
 export async function moveQuestionAction(eventId: string, questionnaireId: string, questionId: string, direction: "up" | "down") {
   const { accessToken } = await hostContext(eventId);
-  const questions = await supabaseRest<Array<Pick<Question, "id" | "sort_order">>>(
-    `questions?select=id,sort_order&questionnaire_id=eq.${questionnaireId}&event_id=eq.${eventId}&order=sort_order.asc,created_at.asc`,
-    { accessToken },
-  );
-  const index = questions.findIndex((question) => question.id === questionId);
-  const otherIndex = direction === "up" ? index - 1 : index + 1;
-  if (index < 0 || otherIndex < 0 || otherIndex >= questions.length) return;
-  const current = questions[index];
-  const other = questions[otherIndex];
-  await Promise.all([
-    supabaseRest(`questions?id=eq.${current.id}&event_id=eq.${eventId}`, { method: "PATCH", accessToken, body: JSON.stringify({ sort_order: other.sort_order }) }),
-    supabaseRest(`questions?id=eq.${other.id}&event_id=eq.${eventId}`, { method: "PATCH", accessToken, body: JSON.stringify({ sort_order: current.sort_order }) }),
-  ]);
+  await supabaseRest<boolean>("rpc/move_question_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({
+      p_event_id: eventId,
+      p_questionnaire_id: questionnaireId,
+      p_question_id: questionId,
+      p_direction: direction,
+    }),
+  });
   revalidatePath(pathFor(eventId, questionnaireId));
 }
