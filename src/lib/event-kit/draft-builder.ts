@@ -79,7 +79,7 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
       title: "100 до 1",
       content: prompt,
       sourceRefs: values.map((answer) => ({ type: "answer", id: answer.id })),
-      data: { generator: "interactive_builder_v2", interactive_kind: "family_feud", stage: "question", prompt, answers: board, revealed_count: 0, response_count: values.length },
+      data: { generator: "interactive_builder_v2", interactive_kind: "family_feud", stage: "intro", prompt, answers: board, revealed_count: 0, response_count: values.length },
     });
   }
 
@@ -91,7 +91,7 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
       title: "Хто це сказав?",
       content: clip(quote.value, 500),
       sourceRefs: [{ type: "answer", id: quote.id }],
-      data: { generator: "interactive_builder_v2", interactive_kind: "who_said", stage: "question", quote: clip(quote.value, 500), author: quote.respondent, revealed: false },
+      data: { generator: "interactive_builder_v2", interactive_kind: "who_said", stage: "intro", quote: clip(quote.value, 500), author: quote.respondent, revealed: false },
     });
   }
 
@@ -106,7 +106,7 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
       title: "Слайдшоу гостей",
       content: `${uniqueMedia.length} фото, відео або аудіо з анкет гостей`,
       sourceRefs: uniqueMedia.map((asset) => ({ type: "media_asset", id: asset.id })),
-      data: { generator: "interactive_builder_v2", interactive_kind: "slideshow", asset_ids: uniqueMedia.map((asset) => asset.id), current_index: 0 },
+      data: { generator: "interactive_builder_v2", interactive_kind: "slideshow", stage: "intro", asset_ids: uniqueMedia.map((asset) => asset.id), current_index: 0 },
     });
   }
 

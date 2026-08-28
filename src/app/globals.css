@@ -291,6 +291,33 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .media-loading { display: grid; place-items: center; border: 2px solid currentColor; font-size: clamp(1.3rem, 3vw, 4rem); }
 .screen-content--blocked { text-align: center; }
 .screen-content--blocked h1, .screen-content--blocked p { margin-inline: auto; }
+.interactive-cover { position: relative; width: 100%; min-height: 66vh; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+.interactive-cover::after { content: ""; position: absolute; right: -8vw; top: 50%; width: min(38vw, 620px); aspect-ratio: 1; border: clamp(12px, 2vw, 30px) solid currentColor; transform: translateY(-50%) rotate(8deg); opacity: .11; }
+.interactive-cover__signal { position: absolute; right: 1vw; top: 1vh; font-family: var(--font-display); font-size: clamp(4rem, 12vw, 14rem); color: var(--cobalt); letter-spacing: -.09em; }
+.interactive-cover h1 { position: relative; z-index: 1; max-width: 12ch; margin: 2vh 0; font-size: clamp(5rem, 13vw, 14rem); line-height: .88; }
+.interactive-cover p { position: relative; z-index: 1; max-width: 28ch; margin: 0; font-size: clamp(1.2rem, 2.4vw, 3rem); }
+.interactive-cover__ready { position: absolute; left: 0; bottom: 1vh; display: flex; align-items: center; gap: 12px; text-transform: uppercase; font-size: clamp(11px, 1vw, 16px); }
+.interactive-cover__ready i { width: 54px; height: 10px; background: var(--coral); animation: ready-signal 1.2s steps(2, end) infinite; }
+.interactive-cover--who_said .interactive-cover__signal { color: var(--coral); }
+.interactive-cover--dilettantes .interactive-cover__signal { color: var(--canvas); -webkit-text-stroke: 2px var(--ink); }
+.interactive-cover--art { min-height: 0; height: 100%; background: var(--ink); }
+.interactive-cover--art::after { display: none; }
+.interactive-cover__art { object-fit: contain; }
+.interactive-cover__ready--overlay { z-index: 2; left: 22px; bottom: 20px; padding: 10px 14px; background: var(--ink); color: var(--canvas); }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.screen-content--wheel { height: 100%; }
+.fortune-layout { height: calc(100% - 42px); display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); gap: 5vw; align-items: center; }
+.fortune-wheel { position: relative; width: min(34vw, 520px); aspect-ratio: 1; display: grid; place-items: center; border: clamp(10px, 1.4vw, 20px) solid var(--ink); border-radius: 50%; background: repeating-conic-gradient(var(--cobalt) 0deg 45deg, var(--coral) 45deg 90deg, var(--paper) 90deg 135deg); transform: rotate(var(--wheel-rotation)); animation: wheel-land 1.8s cubic-bezier(.12,.72,.16,1) both; }
+.fortune-wheel::before { content: ""; position: absolute; inset: 22%; border: 8px solid var(--ink); border-radius: 50%; background: var(--canvas); }
+.fortune-wheel::after { content: "▼"; position: absolute; top: -48px; left: 50%; transform: translateX(-50%); color: var(--ink); font-size: 50px; }
+.fortune-wheel span { position: relative; z-index: 1; font-family: var(--font-display); font-size: clamp(1.5rem, 3vw, 4rem); transform: rotate(var(--wheel-counter-rotation)); animation: wheel-label-land 1.8s cubic-bezier(.12,.72,.16,1) both; }
+.fortune-result { display: grid; gap: 18px; }
+.fortune-result > span, .fortune-result > small { font-size: clamp(10px, 1.1vw, 16px); text-transform: uppercase; }
+.fortune-result strong { max-width: 16ch; font-family: var(--font-display); font-size: clamp(2.5rem, 5vw, 6.5rem); line-height: .98; }
+@keyframes ready-signal { 50% { opacity: .28; } }
+@keyframes wheel-land { from { transform: rotate(0deg); } to { transform: rotate(var(--wheel-rotation)); } }
+@keyframes wheel-label-land { from { transform: rotate(0deg); } to { transform: rotate(var(--wheel-counter-rotation)); } }
+@media (prefers-reduced-motion: reduce) { .interactive-cover__ready i, .fortune-wheel, .fortune-wheel span { animation: none; } }
 
 .backup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .backup-card { min-height: 300px; display: flex; flex-direction: column; padding: 24px; border: var(--line); text-decoration: none; }

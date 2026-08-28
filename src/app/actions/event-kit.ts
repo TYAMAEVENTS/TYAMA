@@ -11,6 +11,16 @@ import { supabaseRest } from "@/lib/supabase/rest";
 
 const PRIVACY = ["host_only", "review_required", "public_allowed"] as const;
 const STATUSES = ["draft", "approved", "rejected", "used"] as const;
+const DILETTANTES_WHEEL = [
+  "Сказати короткий тост із трьома словами від ведучого",
+  "Показати 20 секунд переможного танцю",
+  "Зробити щирий комплімент трьом гостям",
+  "Показати пантомімою звичку героя події",
+  "Заспівати один приспів улюбленої пісні",
+  "Зробити селфі-позу разом із сусідами",
+  "Дати смішний прогноз героям події на рік",
+  "Тричі швидко вимовити скоромовку від ведучого",
+];
 
 export type MediaEventKitState = {
   success?: boolean;
@@ -157,11 +167,12 @@ export async function createDilettantesInteractiveAction(eventId: string, formDa
       content: question,
       data: {
         interactive_kind: "dilettantes",
-        stage: "question",
+        stage: "intro",
         question,
         correct_answer: correctAnswer,
         unit,
         consequence: consequence || "Найдальша відповідь виконує легке завдання від ведучого.",
+        wheel_options: consequence ? [consequence, ...DILETTANTES_WHEEL.slice(0, 7)] : DILETTANTES_WHEEL,
         revealed: false,
       },
       status: "approved",
