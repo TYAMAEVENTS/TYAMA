@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status";
 
@@ -28,6 +28,8 @@ export function PublicMediaUploader({
 }) {
   const [states, setStates] = useState<UploadState[]>(() => files.map(() => "queued"));
   const [busy, setBusy] = useState(false);
+  const preparedUploads = useRef<Array<PreparedUpload | undefined>>([]);
+  const uploadedFiles = useRef<boolean[]>([]);
   const readyCount = states.filter((state) => state === "ready").length;
   const errorCount = states.filter((state) => state === "error").length;
 
@@ -40,28 +42,37 @@ export function PublicMediaUploader({
       setStates([...nextStates]);
       const selected = files[index];
       try {
-        const preparedResponse = await fetch("/api/public-media/prepare", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token,
-            idempotencyKey,
-            questionId: selected.questionId,
-            filename: selected.file.name,
-            mimeType: selected.file.type,
-            sizeBytes: selected.file.size,
-          }),
-        });
-        const prepared = await responseJson<PreparedUpload>(preparedResponse);
-        const uploadBody = new FormData();
-        uploadBody.append("cacheControl", "3600");
-        uploadBody.append("", selected.file);
-        const uploadResponse = await fetch(prepared.upload_url, {
-          method: "PUT",
-          headers: { "x-upsert": "false" },
-          body: uploadBody,
-        });
-        if (!uploadResponse.ok) throw new Error("Upload failed");
+        let prepared = preparedUploads.current[index];
+        if (!prepared) {
+          const preparedResponse = await fetch("/api/public-media/prepare", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token,
+              idempotencyKey,
+              questionId: selected.questionId,
+              filename: selected.file.name,
+              mimeType: selected.file.type,
+              sizeBytes: selected.file.size,
+            }),
+          });
+          prepared = await responseJson<PreparedUpload>(preparedResponse);
+          preparedUploads.current[index] = prepared;
+        }
+        if (!uploadedFiles.current[index]) {
+          const uploadBody = new FormData();
+          uploadBody.append("cacheControl", "3600");
+          uploadBody.append("", selected.file);
+          const uploadResponse = await fetch(prepared.upload_url, {
+            method: "PUT",
+            headers: { "x-upsert": "false" },
+            body: uploadBody,
+          });
+          if (!uploadResponse.ok) {
+            throw new Error("Upload failed");
+          }
+          uploadedFiles.current[index] = true;
+        }
         await responseJson(await fetch("/api/public-media/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
