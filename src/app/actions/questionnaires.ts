@@ -69,6 +69,23 @@ function contextualGuestQuestions(signal: string) {
   return questions.slice(0, 3);
 }
 
+function whoSaidQuestion(eventType: string) {
+  const subject = eventType === "wedding"
+    ? "наречених"
+    : eventType === "birthday"
+      ? "іменинника або іменинницю"
+      : eventType === "corporate"
+        ? "вашу команду або героя події"
+        : "героїв події";
+  return {
+    type: "long_text" as const,
+    prompt: `Опишіть ${subject} однією фразою.`,
+    help_text: "Ця фраза може потрапити у гру «Хто це сказав?». Ведучий не показуватиме її як звичайну відповідь.",
+    is_required: false,
+    default_privacy: "review_required" as const,
+  };
+}
+
 export type QuestionnaireActionState = { error?: string; questionnaireId?: string };
 
 function pathFor(eventId: string, questionnaireId?: string) {
@@ -121,7 +138,14 @@ export async function createQuestionnaireAction(
           ? "Guest-анкета сформована з приватного брифу ведучого та даних події. Бриф не публікується; перевірте питання перед публікацією."
           : "Повна базова guest-анкета сформована з даних події. Додайте або змініть питання перед публікацією.";
       }
-      starter = [...STARTERS.guest, ...contextualGuestQuestions(signal)];
+      const mediaQuestion = STARTERS.guest.find((question) => question.type === "media");
+      const textQuestions = STARTERS.guest.filter((question) => question.type !== "media");
+      starter = [
+        ...textQuestions,
+        whoSaidQuestion(event.event_type),
+        ...contextualGuestQuestions(signal),
+        ...(mediaQuestion ? [mediaQuestion] : []),
+      ];
     }
     const questions = starter.map((question, index) => ({
       ...question,

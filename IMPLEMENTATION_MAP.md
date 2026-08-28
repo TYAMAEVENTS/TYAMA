@@ -5,7 +5,7 @@
 - Guest questionnaires render one question per screen; optional questions have `Пропустити`, while customer questionnaires keep the full-form workflow.
 - New guest questionnaires include an optional media step and enable image, video, and audio uploads. Migration `20260828120000_add_media_to_guest_questionnaires.sql` adds the same capability to existing guest questionnaires without duplicating media questions.
 - Event workspace now starts with a three-step launchpad for guest QR, response review, and Event Kit/rehearsal readiness.
-- Answer review has three one-click decisions with advanced privacy/moderation controls preserved under disclosure.
+- Response triage is exception-based: clean public answers are preselected for interactive building, obvious profanity/insults wait for the Host, and private answers never enter the bulk builder.
 
 Source: `TYAMA_PILOT_SVIAT_HANDOFF_v3`, with legacy-repository requirements explicitly cancelled by the owner on 2026-08-26.
 
@@ -39,7 +39,7 @@ Source: `TYAMA_PILOT_SVIAT_HANDOFF_v3`, with legacy-repository requirements expl
 - `/q/[token]`
 - `/screen/[token]`
 - `/api/public-screen/[token]`
-- Supabase Edge Function: `public-api` (`get_questionnaire`, `submit_questionnaire`, `prepare_media_upload`, `complete_media_upload`, `get_public_screen`)
+- Supabase Edge Function: `public-api` (`get_questionnaire`, `submit_questionnaire`, `prepare_media_upload`, `complete_media_upload`, `get_public_screen`, `get_public_media`)
 
 ## Data boundary
 
@@ -100,3 +100,9 @@ The product/admin strict UX audit now passes with zero findings. Canonical form 
 Outstanding external gates are intentionally not mislabeled as code defects: Supabase Auth currently reports open signup and must be switched off in Dashboard to enforce the two-user allowlist; leaked-password protection remains plan-gated; physical iPhone/Android photo/video/audio and venue display/HDMI checks require real devices; real AI generation requires an explicitly configured server-side model key. Deterministic Smart Draft and every manual operational fallback remain available without AI.
 
 Guest questionnaire creation was expanded on 2026-08-28 from a four-question placeholder to a 14-question operational starter. The Host chooses either a private Host brief or available customer/couple/bride/groom submissions as the context source. Customer and brief signals can add narrowly scoped travel, family, music, or work/study modules without copying private source text into the public questionnaire description. Missing customer submissions fall back to Event metadata plus the Host brief, and every generated question remains editable before publishing.
+
+Fast Event Mode was added on 2026-08-28 for the five-minute-break scenario. The Responses screen selects all clean, public answers by default, groups them by question, exposes `Select all / Clear all`, and creates ready Event Kit interactives in one submit. Only obvious profanity/insults enter the Host review queue. Media has no separate approval step: it remains private until the Host's explicit `Build interactives` or `Add to slideshow` action promotes only those selected assets.
+
+The deterministic interactive set now includes: multiple `100 до 1` boards with points equal to real guest-answer frequency; mandatory event-aware `Хто це сказав?` quote cards with a separate author reveal; manually authored numeric `Клуб дилетантів` questions with answer/consequence reveal; and multi-file slideshows with manual next-file and autoplay controls. No model key is required for these mechanics.
+
+Public Screen is now structurally restricted at the Postgres RPC boundary to `interactive` and `media` Event Kit item types. Raw stories, notes, facts, warnings, and standalone answers cannot be shown even if a client submits their IDs. Slideshow objects remain in the private bucket; `public-api` v5 issues a 60-second signed URL only when the requested asset belongs to the Event's currently active public slideshow.

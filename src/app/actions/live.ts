@@ -45,6 +45,82 @@ export async function showEventKitItemAction(eventId: string, itemId: string) {
   refreshLiveRoutes(eventId);
 }
 
+export async function revealInteractiveAction(eventId: string, itemId: string) {
+  const { accessToken } = await hostContext(eventId);
+  const rows = await supabaseRest<Array<{ data: Record<string, unknown>; item_type: string }>>(
+    `event_kit_items?select=data,item_type&id=eq.${itemId}&event_id=eq.${eventId}&limit=1`,
+    { accessToken },
+  );
+  const item = rows[0];
+  if (!item || item.item_type !== "interactive") return;
+  const data = { ...item.data };
+  if (data.interactive_kind === "family_feud") {
+    const answers = Array.isArray(data.answers) ? data.answers : [];
+    data.revealed_count = Math.min(Number(data.revealed_count ?? 0) + 1, answers.length);
+    data.stage = "reveal";
+  } else {
+    data.revealed = true;
+    data.stage = "reveal";
+  }
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ data }),
+  });
+  await supabaseRest<number>("rpc/show_event_kit_item_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ p_event_id: eventId, p_item_id: itemId }),
+  });
+  refreshLiveRoutes(eventId);
+}
+
+export async function resetInteractiveAction(eventId: string, itemId: string) {
+  const { accessToken } = await hostContext(eventId);
+  const rows = await supabaseRest<Array<{ data: Record<string, unknown>; item_type: string }>>(
+    `event_kit_items?select=data,item_type&id=eq.${itemId}&event_id=eq.${eventId}&limit=1`,
+    { accessToken },
+  );
+  const item = rows[0];
+  if (!item || item.item_type !== "interactive") return;
+  const data = { ...item.data, stage: "question", revealed: false, revealed_count: 0 };
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ data }),
+  });
+  await supabaseRest<number>("rpc/show_event_kit_item_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ p_event_id: eventId, p_item_id: itemId }),
+  });
+  refreshLiveRoutes(eventId);
+}
+
+export async function advanceSlideshowAction(eventId: string, itemId: string) {
+  const { accessToken } = await hostContext(eventId);
+  const rows = await supabaseRest<Array<{ data: Record<string, unknown>; item_type: string }>>(
+    `event_kit_items?select=data,item_type&id=eq.${itemId}&event_id=eq.${eventId}&limit=1`,
+    { accessToken },
+  );
+  const item = rows[0];
+  if (!item || item.item_type !== "media") return;
+  const assetIds = Array.isArray(item.data.asset_ids) ? item.data.asset_ids : [];
+  const nextIndex = assetIds.length ? (Number(item.data.current_index ?? 0) + 1) % assetIds.length : 0;
+  const data = { ...item.data, current_index: nextIndex };
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ data }),
+  });
+  await supabaseRest<number>("rpc/show_event_kit_item_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ p_event_id: eventId, p_item_id: itemId }),
+  });
+  refreshLiveRoutes(eventId);
+}
+
 export async function clearPublicScreenAction(eventId: string) {
   const { accessToken } = await hostContext(eventId);
   await supabaseRest<number>("rpc/clear_public_screen_tx", {

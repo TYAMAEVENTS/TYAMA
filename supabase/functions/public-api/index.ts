@@ -208,5 +208,63 @@ Deno.serve(async (request: Request) => {
     });
   }
 
+  if (action === "get_public_media") {
+    const tokenHash = String(body.token_hash ?? "");
+    const assetId = String(body.asset_id ?? "");
+    if (!/^[0-9a-f]{64}$/.test(tokenHash) || !UUID_PATTERN.test(assetId)) return json(null, 404);
+
+    const { data: event, error: eventError } = await admin
+      .from("events")
+      .select("id,host_id")
+      .eq("public_screen_token_hash", tokenHash)
+      .eq("public_screen_enabled", true)
+      .maybeSingle();
+    if (eventError) return json({ error: "Request failed" }, 500);
+    if (!event) return json(null, 404);
+
+    const { data: state, error: stateError } = await admin
+      .from("live_state")
+      .select("source_event_kit_item_id")
+      .eq("event_id", event.id)
+      .eq("host_id", event.host_id)
+      .maybeSingle();
+    if (stateError) return json({ error: "Request failed" }, 500);
+    if (!state?.source_event_kit_item_id) return json(null, 404);
+
+    const { data: item, error: itemError } = await admin
+      .from("event_kit_items")
+      .select("data")
+      .eq("id", state.source_event_kit_item_id)
+      .eq("event_id", event.id)
+      .eq("host_id", event.host_id)
+      .eq("item_type", "media")
+      .in("status", ["approved", "used"])
+      .eq("privacy_status", "public_allowed")
+      .eq("do_not_use", false)
+      .maybeSingle();
+    if (itemError) return json({ error: "Request failed" }, 500);
+    const assetIds = Array.isArray(item?.data?.asset_ids) ? item.data.asset_ids.map(String) : [];
+    if (!item || !assetIds.includes(assetId)) return json(null, 404);
+
+    const { data: asset, error: assetError } = await admin
+      .from("media_assets")
+      .select("storage_path,kind,mime_type")
+      .eq("id", assetId)
+      .eq("event_id", event.id)
+      .eq("host_id", event.host_id)
+      .eq("status", "ready")
+      .eq("moderation_status", "approved")
+      .eq("privacy_status", "public_allowed")
+      .maybeSingle();
+    if (assetError) return json({ error: "Request failed" }, 500);
+    if (!asset) return json(null, 404);
+
+    const { data: signed, error: signedError } = await admin.storage
+      .from("event-media")
+      .createSignedUrl(asset.storage_path, 60);
+    if (signedError || !signed?.signedUrl) return json({ error: "Media unavailable" }, 503);
+    return json({ url: signed.signedUrl, kind: asset.kind, mime_type: asset.mime_type });
+  }
+
   return json({ error: "Unknown action" }, 404);
 });

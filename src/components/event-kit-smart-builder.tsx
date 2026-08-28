@@ -18,12 +18,12 @@ export function EventKitSmartBuilder({ eventId }: { eventId: string }) {
 
   return (
     <form action={action} className="editor-form" noValidate>
-      <p>Збере окремі робочі блоки з відповідей. Нічого не публікується автоматично.</p>
+      <p>Одним натисканням збере «100 до 1» і «Хто це сказав?» лише з автоматично відібраних відповідей. Raw-текст на екран не потрапляє.</p>
       {state.error ? <StatusMessage tone="error">{state.error}</StatusMessage> : null}
       {state.success ? <StatusMessage>{state.created
-        ? `Створено ${state.created} чернеток${state.skipped ? `, пропущено дублікатів: ${state.skipped}` : ""}.`
+        ? `Створено ${state.created} інтерактивів${state.skipped ? `, пропущено дублікатів: ${state.skipped}` : ""}.`
         : "Усі доступні чернетки вже зібрані — дублікатів не створено."}</StatusMessage> : null}
-      <Button type="submit" busy={pending}>Зібрати робочі чернетки</Button>
+      <Button type="submit" busy={pending}>Зібрати готові інтерактиви</Button>
     </form>
   );
 }

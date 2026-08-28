@@ -72,10 +72,9 @@ export async function createEventKitItemAction(eventId: string, formData: FormDa
 export async function buildEventKitDraftsAction(
   eventId: string,
   _previousState: BuildEventKitState,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<BuildEventKitState> {
   void _previousState;
-  void _formData;
   const { user, accessToken } = await hostContext(eventId);
   try {
     const [submissions, existing, last] = await Promise.all([
@@ -89,11 +88,25 @@ export async function buildEventKitDraftsAction(
         { accessToken },
       ),
     ]);
-    const drafts = buildSmartEventKitDrafts(submissions);
-    if (!drafts.length) return { error: "Ще немає відповідей, з яких можна зібрати Event Kit." };
+    const selectedIds = new Set(formData.getAll("answerId").map(String));
+    const selectedSubmissions = selectedIds.size
+      ? submissions.map((submission) => ({ ...submission, answers: submission.answers.filter((answer) => selectedIds.has(answer.id)) }))
+      : submissions;
+    const drafts = buildSmartEventKitDrafts(selectedSubmissions);
+    if (!drafts.length) return { error: "Поки немає достатньо безпечних відповідей для інтерактиву. Підозрілі відповіді лишилися в черзі перевірки." };
     const existingKeys = new Set(existing.flatMap((item) => typeof item.data.generator_key === "string" ? [item.data.generator_key] : []));
     const missing = drafts.filter((draft) => !existingKeys.has(draft.generatorKey));
     if (missing.length) {
+      const publicMediaIds = missing.flatMap((draft) => draft.itemType === "media"
+        ? draft.sourceRefs.filter((ref) => ref.type === "media_asset").map((ref) => ref.id)
+        : []);
+      if (publicMediaIds.length) {
+        await supabaseRest(`media_assets?event_id=eq.${eventId}&id=in.(${publicMediaIds.join(",")})`, {
+          method: "PATCH",
+          accessToken,
+          body: JSON.stringify({ moderation_status: "approved", privacy_status: "public_allowed" }),
+        });
+      }
       const firstSortOrder = (last[0]?.sort_order ?? 0) + 10;
       await supabaseRest("event_kit_items", {
         method: "POST",
@@ -107,8 +120,9 @@ export async function buildEventKitDraftsAction(
           content: draft.content,
           data: { ...draft.data, generator_key: draft.generatorKey },
           source_refs: draft.sourceRefs,
-          status: "draft",
-          privacy_status: "host_only",
+          status: "approved",
+          privacy_status: "public_allowed",
+          is_useful: true,
           sort_order: firstSortOrder + index * 10,
         }))),
       });
@@ -118,6 +132,47 @@ export async function buildEventKitDraftsAction(
   } catch {
     return { error: "Не вдалося зібрати чернетки. Raw answers і ручний Event Kit залишилися без змін." };
   }
+}
+
+export async function createDilettantesInteractiveAction(eventId: string, formData: FormData) {
+  const { user, accessToken } = await hostContext(eventId);
+  const question = String(formData.get("question") ?? "").trim().slice(0, 500);
+  const correctAnswer = Number(String(formData.get("correctAnswer") ?? "").replace(",", "."));
+  const unit = String(formData.get("unit") ?? "").trim().slice(0, 40);
+  const consequence = String(formData.get("consequence") ?? "").trim().slice(0, 300);
+  if (!question || !Number.isFinite(correctAnswer)) redirect(`/events/${eventId}/event-kit?error=dilettantes`);
+  const last = await supabaseRest<Array<Pick<EventKitItem, "sort_order">>>(
+    `event_kit_items?select=sort_order&event_id=eq.${eventId}&order=sort_order.desc&limit=1`,
+    { accessToken },
+  );
+  await supabaseRest("event_kit_items", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({
+      host_id: user.id,
+      event_id: eventId,
+      source_type: "manual",
+      item_type: "interactive",
+      title: "Клуб дилетантів",
+      content: question,
+      data: {
+        interactive_kind: "dilettantes",
+        stage: "question",
+        question,
+        correct_answer: correctAnswer,
+        unit,
+        consequence: consequence || "Найдальша відповідь виконує легке завдання від ведучого.",
+        revealed: false,
+      },
+      status: "approved",
+      privacy_status: "public_allowed",
+      is_useful: true,
+      sort_order: (last[0]?.sort_order ?? 0) + 10,
+    }),
+  });
+  revalidatePath(`/events/${eventId}/event-kit`);
+  revalidatePath(`/events/${eventId}/rehearsal`);
+  revalidatePath(`/events/${eventId}/live`);
 }
 
 export async function createEventKitItemFromAnswerAction(
@@ -192,6 +247,11 @@ export async function createEventKitItemFromMediaAction(
     if (existing.some((item) => item.source_refs?.some((ref) => ref.type === "media_asset" && ref.id === asset.id))) {
       return { success: true, alreadyExists: true };
     }
+    await supabaseRest(`media_assets?id=eq.${asset.id}&event_id=eq.${eventId}`, {
+      method: "PATCH",
+      accessToken,
+      body: JSON.stringify({ moderation_status: "approved", privacy_status: "public_allowed" }),
+    });
     await supabaseRest("event_kit_items", {
       method: "POST",
       accessToken,
@@ -200,11 +260,13 @@ export async function createEventKitItemFromMediaAction(
         event_id: eventId,
         source_type: "manual",
         item_type: "media",
-        title: asset.original_filename || `${asset.kind} з анкети`,
-        content: "Медіа з відповіді. Перевірте privacy та moderation перед показом.",
+        title: "Слайдшоу гостей",
+        content: asset.original_filename || `${asset.kind} з анкети`,
+        data: { interactive_kind: "slideshow", asset_ids: [asset.id], current_index: 0 },
         source_refs: [{ type: "media_asset", id: asset.id }],
-        status: "draft",
-        privacy_status: "host_only",
+        status: "approved",
+        privacy_status: "public_allowed",
+        is_useful: true,
       }),
     });
     revalidatePath(`/events/${eventId}/event-kit`);

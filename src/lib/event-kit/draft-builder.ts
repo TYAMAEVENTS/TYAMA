@@ -6,7 +6,7 @@ export type SmartEventKitDraft = {
   itemType: EventKitType;
   title: string;
   content: string;
-  sourceRefs: Array<{ type: "answer"; id: string }>;
+  sourceRefs: Array<{ type: "answer" | "media_asset"; id: string }>;
   data: Record<string, unknown>;
 };
 
@@ -19,6 +19,7 @@ type UsableAnswer = {
 
 const STORY_PROMPT = /істор|спогад|момент|сміш|кумед|познайом|пригад|випадок/i;
 const NON_SURVEY_PROMPT = /як вас звати|ваше ім['’]?я|email|e-mail|телефон|контакт|ким ви довод|ваша роль|дата народження/i;
+const WHO_SAID_PROMPT = /опишіть.+одн(ією|ою) фраз|трьома словами|яке слово найкраще описує/i;
 
 function answerValue(answer: EventSubmission["answers"][number]) {
   if (answer.answer_text?.trim()) return answer.answer_text.trim();
@@ -30,7 +31,11 @@ function answerValue(answer: EventSubmission["answers"][number]) {
 function collectAnswers(submissions: EventSubmission[]): UsableAnswer[] {
   return submissions.flatMap((submission) => submission.answers.flatMap((answer) => {
     const value = answerValue(answer);
-    if (!value || answer.do_not_use || answer.moderation_status === "rejected" || answer.question?.type === "media") return [];
+    if (!value
+      || answer.do_not_use
+      || answer.moderation_status !== "approved"
+      || answer.privacy_status !== "public_allowed"
+      || answer.question?.type === "media") return [];
     return [{
       id: answer.id,
       prompt: answer.question?.prompt || "Відповідь з анкети",
@@ -44,91 +49,66 @@ function clip(value: string, length = 700) {
   return value.length > length ? `${value.slice(0, length - 1).trim()}…` : value;
 }
 
+function normalizedSurveyValue(value: string) {
+  return value.toLocaleLowerCase("uk-UA").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+}
+
 export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartEventKitDraft[] {
   const answers = collectAnswers(submissions);
-  if (!answers.length) return [];
 
   const drafts: SmartEventKitDraft[] = [];
-  const context = answers.filter((answer) => !STORY_PROMPT.test(answer.prompt)).slice(0, 6);
-  if (context.length) {
-    drafts.push({
-      generatorKey: "smart-context-v1",
-      itemType: "fact",
-      title: "Контекст події — головне перед виходом",
-      content: context.map((answer) => `• ${answer.prompt}\n${clip(answer.value, 360)}`).join("\n\n"),
-      sourceRefs: context.map((answer) => ({ type: "answer", id: answer.id })),
-      data: { generator: "smart_draft_v1", block: "context" },
-    });
-  }
-
-  const stories = answers.filter((answer) => STORY_PROMPT.test(answer.prompt) || answer.value.length >= 120).slice(0, 4);
-  for (const story of stories) {
-    drafts.push({
-      generatorKey: `smart-story-v1:${story.id}`,
-      itemType: "story",
-      title: `Історія від ${story.respondent}`,
-      content: `${story.prompt}\n\n${clip(story.value, 1200)}\n\nШпаргалка: уточніть деталі й фінальну репліку перед використанням наживо.`,
-      sourceRefs: [{ type: "answer", id: story.id }],
-      data: { generator: "smart_draft_v1", block: "story" },
-    });
-  }
-
   const grouped = new Map<string, UsableAnswer[]>();
   for (const answer of answers) grouped.set(answer.prompt, [...(grouped.get(answer.prompt) ?? []), answer]);
-  const survey = [...grouped.entries()]
-    .filter(([prompt, values]) => values.length >= 2 && !NON_SURVEY_PROMPT.test(prompt) && !STORY_PROMPT.test(prompt))
-    .sort((a, b) => b[1].length - a[1].length)[0];
-  if (survey) {
+  const surveys = [...grouped.entries()]
+    .filter(([prompt, values]) => values.length >= 2 && !NON_SURVEY_PROMPT.test(prompt) && !STORY_PROMPT.test(prompt) && !WHO_SAID_PROMPT.test(prompt))
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 10);
+  for (const survey of surveys) {
     const [prompt, values] = survey;
-    drafts.push({
-      generatorKey: `smart-100-v1:${prompt}`,
+    const answerGroups = new Map<string, { label: string; points: number }>();
+    for (const answer of values) {
+      const key = normalizedSurveyValue(answer.value);
+      if (!key) continue;
+      const current = answerGroups.get(key);
+      answerGroups.set(key, { label: current?.label ?? clip(answer.value, 90), points: (current?.points ?? 0) + 1 });
+    }
+    const board = [...answerGroups.values()].sort((a, b) => b.points - a.points).slice(0, 8);
+    if (board.length) drafts.push({
+      generatorKey: `smart-family-feud-v2:${prompt}`,
       itemType: "interactive",
-      title: "100 зі 100 — робоча чернетка",
-      content: [
-        `Питання: ${prompt}`,
-        `Фактично зібрано відповідей: ${values.length}. Не вигадуйте бали — згрупуйте схожі формулювання перед грою.`,
-        "",
-        ...values.slice(0, 12).map((answer) => `• ${answer.respondent}: ${clip(answer.value, 220)}`),
-        "",
-        "Механіка: дві команди називають найпопулярніші відповіді; ведучий відкриває підготовлені позиції по черзі.",
-      ].join("\n"),
+      title: "100 до 1",
+      content: prompt,
       sourceRefs: values.map((answer) => ({ type: "answer", id: answer.id })),
-      data: { generator: "smart_draft_v1", block: "interactive_100", response_count: values.length },
-    });
-  } else {
-    drafts.push({
-      generatorKey: "smart-100-setup-v2",
-      itemType: "interactive",
-      title: "100 зі 100 — підготовка збору",
-      content: [
-        "У поточних відповідях ще немає придатного спільного питання з достатньою вибіркою.",
-        "",
-        "Перед грою додайте в guest-анкету одне коротке питання, наприклад:",
-        "• Яке слово найкраще описує цю пару?",
-        "• Що вони найімовірніше зроблять у спільну вільну суботу?",
-        "• Без чого неможливо уявити їхнє спільне життя?",
-        "",
-        "Після відповідей згрупуйте однакові формулювання й призначте бали лише за фактичну частоту. TYAMA не вигадує результати.",
-      ].join("\n"),
-      sourceRefs: [],
-      data: { generator: "smart_draft_v1", block: "interactive_100_setup", response_count: 0 },
+      data: { generator: "interactive_builder_v2", interactive_kind: "family_feud", stage: "question", prompt, answers: board, revealed_count: 0, response_count: values.length },
     });
   }
 
-  drafts.push({
-    generatorKey: "smart-host-cheatsheet-v1",
-    itemType: "warning",
-    title: "Шпаргалка ведучого — контроль перед Live",
-    content: [
-      "1. Перевірити імена, наголоси та приватні теми.",
-      "2. Схвалити лише потрібні блоки; для екрана окремо встановити public_allowed.",
-      "3. Пройти Rehearsal і перевірити Public Screen на окремому пристрої.",
-      "4. Завантажити CSV, JSON, printable Event Kit і потрібні медіа до виїзду.",
-      "5. Якщо зв’язок зник — продовжити з локального backup; останній Public Screen state збережеться.",
-    ].join("\n"),
-    sourceRefs: [],
-    data: { generator: "smart_draft_v1", block: "host_cheatsheet" },
-  });
+  const quotes = answers.filter((answer) => WHO_SAID_PROMPT.test(answer.prompt)).slice(0, 20);
+  for (const quote of quotes) {
+    drafts.push({
+      generatorKey: `smart-who-said-v2:${quote.id}`,
+      itemType: "interactive",
+      title: "Хто це сказав?",
+      content: clip(quote.value, 500),
+      sourceRefs: [{ type: "answer", id: quote.id }],
+      data: { generator: "interactive_builder_v2", interactive_kind: "who_said", stage: "question", quote: clip(quote.value, 500), author: quote.respondent, revealed: false },
+    });
+  }
+
+  const mediaAssets = submissions.flatMap((submission) => submission.answers.flatMap((answer) =>
+    answer.media_assets.filter((asset) => asset.status === "ready" && asset.moderation_status !== "rejected" && asset.privacy_status !== "host_only"),
+  ));
+  const uniqueMedia = [...new Map(mediaAssets.map((asset) => [asset.id, asset])).values()].slice(0, 50);
+  if (uniqueMedia.length) {
+    drafts.push({
+      generatorKey: `smart-slideshow-v2:${uniqueMedia.map((asset) => asset.id).sort().join(":")}`,
+      itemType: "media",
+      title: "Слайдшоу гостей",
+      content: `${uniqueMedia.length} фото, відео або аудіо з анкет гостей`,
+      sourceRefs: uniqueMedia.map((asset) => ({ type: "media_asset", id: asset.id })),
+      data: { generator: "interactive_builder_v2", interactive_kind: "slideshow", asset_ids: uniqueMedia.map((asset) => asset.id), current_index: 0 },
+    });
+  }
 
   return drafts;
 }

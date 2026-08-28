@@ -15,6 +15,7 @@ export type PublicPayload = {
   title?: string | null;
   content?: string | null;
   session_mode?: "rehearsal" | "live";
+  data?: Record<string, unknown>;
 };
 
 export type LiveState = {
