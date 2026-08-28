@@ -11,7 +11,10 @@ export const metadata: Metadata = { title: "Події" };
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ archived?: string }> }) {
   await requireUser();
   const showArchived = (await searchParams).archived === "1";
-  const [events, submissionCounts] = await Promise.all([listEvents(showArchived), getEventSubmissionCounts()]);
+  const [events, submissionCounts] = await Promise.all([
+    listEvents(showArchived),
+    getEventSubmissionCounts().catch(() => new Map<string, number>()),
+  ]);
 
   return (
     <AppShell>

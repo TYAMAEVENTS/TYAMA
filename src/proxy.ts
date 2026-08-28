@@ -16,8 +16,11 @@ export async function proxy(request: NextRequest) {
 
   try {
     const refreshed = await refreshAccessToken(refreshToken);
-    const response = NextResponse.next({ request });
     const nextExpiresAt = refreshed.expires_at ?? now + refreshed.expires_in;
+    request.cookies.set(AUTH_COOKIES.access, refreshed.access_token);
+    request.cookies.set(AUTH_COOKIES.refresh, refreshed.refresh_token);
+    request.cookies.set(AUTH_COOKIES.expiresAt, String(nextExpiresAt));
+    const response = NextResponse.next({ request });
     response.cookies.set(AUTH_COOKIES.access, refreshed.access_token, {
       ...AUTH_COOKIE_OPTIONS,
       maxAge: refreshed.expires_in,

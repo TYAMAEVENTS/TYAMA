@@ -23,7 +23,7 @@ export default async function LoginPage() {
       <section className="login-grid">
         <div className="login-grid__brand">
           <span className="eyebrow">TYAMA / HOST ACCESS</span>
-          <h1>Свят,<br />усе на місці.</h1>
+          <h1>Ваш простір.<br />Усе на місці.</h1>
         </div>
         <div className="login-grid__form">
           <span className="eyebrow">ВХІД ДО РОБОЧОГО ПРОСТОРУ</span>
