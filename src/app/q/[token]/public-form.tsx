@@ -15,6 +15,8 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
   const [mediaError, setMediaError] = useState<string>();
   const [submissionKey, setSubmissionKey] = useState(idempotencyKey);
   const [draftStatus, setDraftStatus] = useState<"restored" | "saved" | undefined>();
+  const [guestStep, setGuestStep] = useState(0);
+  const [stepError, setStepError] = useState<string>();
   const formRef = useRef<HTMLFormElement>(null);
   const saveTimer = useRef<number | undefined>(undefined);
   const draftKey = `tyama:questionnaire-draft:v1:${token}`;
@@ -24,6 +26,8 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
     questionnaire.allow_video ? "video/mp4,video/quicktime" : "",
     questionnaire.allow_audio ? "audio/mpeg,audio/mp4,audio/wav" : "",
   ].filter(Boolean).join(",");
+  const isGuestFlow = questionnaire.audience === "guest" || questionnaire.audience === "other";
+  const totalGuestSteps = questionnaire.questions.length + 1;
 
   useEffect(() => {
     const form = formRef.current;
@@ -102,20 +106,71 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
     setSelectedMedia((current) => ({ ...current, [questionId]: next }));
   }
 
+  function currentStepIsComplete() {
+    const form = formRef.current;
+    if (!form) return false;
+    if (guestStep === 0) {
+      const displayName = form.elements.namedItem("displayName");
+      if (!(displayName instanceof HTMLInputElement) || !displayName.value.trim()) {
+        setStepError("Напишіть, як до вас звертатися.");
+        if (displayName instanceof HTMLInputElement) displayName.focus();
+        return false;
+      }
+      return true;
+    }
+    const question = questionnaire.questions[guestStep - 1];
+    if (!question?.is_required) return true;
+    if (question.type === "media") {
+      if ((selectedMedia[question.id] ?? []).length) return true;
+    } else {
+      const values = new FormData(form).getAll(`answer:${question.id}`);
+      if (values.some((value) => String(value).trim())) return true;
+    }
+    setStepError("Це питання обов’язкове. Додайте відповідь, щоб продовжити.");
+    const control = form.elements.namedItem(`answer:${question.id}`);
+    if (control instanceof HTMLElement) control.focus();
+    return false;
+  }
+
+  function goNext() {
+    if (!currentStepIsComplete()) return;
+    setStepError(undefined);
+    setGuestStep((current) => Math.min(current + 1, totalGuestSteps - 1));
+    window.scrollTo({ top: formRef.current?.offsetTop ?? 0, behavior: "smooth" });
+  }
+
+  function goBack() {
+    setStepError(undefined);
+    setGuestStep((current) => Math.max(0, current - 1));
+  }
+
+  function skipQuestion(questionId: string, type: string) {
+    const form = formRef.current;
+    const control = form?.elements.namedItem(`answer:${questionId}`);
+    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) control.value = "";
+    if (control instanceof HTMLSelectElement) {
+      for (const option of control.options) option.selected = false;
+    }
+    if (type === "media") setSelectedMedia((current) => ({ ...current, [questionId]: [] }));
+    setStepError(undefined);
+    setGuestStep((current) => Math.min(current + 1, totalGuestSteps - 1));
+  }
+
   if (state.success) {
-    return mediaFiles.length ? <PublicMediaUploader token={token} idempotencyKey={idempotencyKey} files={mediaFiles} /> : <section className="public-success"><span className="public-success__mark">✓</span><h2>Збіглося.</h2><p>Відповіді вже у Свята. Їх ніхто не побачить публічно без його перевірки.</p></section>;
+    return mediaFiles.length ? <PublicMediaUploader token={token} idempotencyKey={submissionKey} files={mediaFiles} /> : <section className="public-success"><span className="public-success__mark">✓</span><h2>Збіглося.</h2><p>Відповіді вже у Свята. Їх ніхто не побачить публічно без його перевірки.</p></section>;
   }
   return (
-    <form ref={formRef} action={action} className="public-form" onInput={saveDraft} onChange={saveDraft} noValidate>
+    <form ref={formRef} action={action} className={`public-form ${isGuestFlow ? "public-form--steps" : ""}`} onInput={saveDraft} onChange={saveDraft} noValidate>
       <input type="hidden" name="idempotencyKey" value={submissionKey} />
       {state.error ? <StatusMessage tone="error">{state.error}</StatusMessage> : null}
       <div className="draft-status" role="status" aria-live="polite"><strong>{draftStatus === "restored" ? "Чернетку відновлено." : draftStatus === "saved" ? "Чернетку збережено на цьому пристрої." : "Текст автоматично зберігається на цьому пристрої."}</strong><span>Файли не зберігаються — їх треба вибрати перед надсиланням.</span></div>
-      <div className="public-question public-question--identity">
+      {isGuestFlow ? <div className="guest-progress" aria-label={`Крок ${guestStep + 1} з ${totalGuestSteps}`}><span>КРОК {String(guestStep + 1).padStart(2, "0")} / {String(totalGuestSteps).padStart(2, "0")}</span><div><i style={{ width: `${((guestStep + 1) / totalGuestSteps) * 100}%` }} /></div></div> : null}
+      <div className="public-question public-question--identity" hidden={isGuestFlow && guestStep !== 0}>
         <label htmlFor="displayName"><span className="public-question__index">00</span><strong>Як до вас звертатися?</strong></label>
         <input id="displayName" name="displayName" required autoComplete="name" />
       </div>
       {questionnaire.questions.map((question, index) => (
-        <div className="public-question" key={question.id}>
+        <div className="public-question" key={question.id} hidden={isGuestFlow && guestStep !== index + 1}>
           <label htmlFor={`answer-${question.id}`}><span className="public-question__index">{String(index + 1).padStart(2, "0")}</span><strong>{question.prompt}</strong>{question.is_required ? <em>Обов’язково</em> : null}</label>
           {question.help_text ? <p>{question.help_text}</p> : null}
           {question.type === "long_text" ? <textarea className="resize-none" id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} /> : null}
@@ -126,7 +181,16 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
         </div>
       ))}
       {mediaError ? <StatusMessage tone="error">{mediaError}</StatusMessage> : null}
-      <div className="public-submit"><p>Натискаючи «Надіслати», ви передаєте відповіді ведучому цієї події. Публікація можлива лише після ручної модерації.</p><Button type="submit" busy={pending}>Надіслати ведучому →</Button></div>
+      {stepError ? <StatusMessage tone="error">{stepError}</StatusMessage> : null}
+      {isGuestFlow ? (
+        <div className="guest-step-actions">
+          <button className="button button--neutral button--outline" type="button" onClick={goBack} disabled={guestStep === 0 || pending}>Назад</button>
+          <div>
+            {guestStep > 0 && !questionnaire.questions[guestStep - 1]?.is_required ? <button className="text-action" type="button" onClick={() => skipQuestion(questionnaire.questions[guestStep - 1].id, questionnaire.questions[guestStep - 1].type)} disabled={pending}>Пропустити</button> : null}
+            {guestStep < totalGuestSteps - 1 ? <button className="button button--brand button--solid" type="button" onClick={goNext}>Далі →</button> : <Button type="submit" busy={pending}>Надіслати ведучому →</Button>}
+          </div>
+        </div>
+      ) : <div className="public-submit"><p>Натискаючи «Надіслати», ви передаєте відповіді ведучому цієї події. Публікація можлива лише після ручної модерації.</p><Button type="submit" busy={pending}>Надіслати ведучому →</Button></div>}
     </form>
   );
 }

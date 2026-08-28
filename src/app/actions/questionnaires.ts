@@ -42,7 +42,6 @@ const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prom
     { type: "long_text", prompt: "Що ще Свят має зрозуміти про вас до першої зустрічі?", help_text: "Будь-який контекст, для якого не знайшлося окремого питання.", is_required: false, default_privacy: "host_only" },
   ],
   guest: [
-    { type: "short_text", prompt: "Як вас звати?", help_text: null, is_required: true, default_privacy: "host_only" },
     { type: "short_text", prompt: "Ким ви доводитесь героям події та як давно ви знайомі?", help_text: null, is_required: true, default_privacy: "review_required" },
     { type: "long_text", prompt: "Якими трьома словами ви б описали героїв події?", help_text: "Можна серйозно, смішно або дуже по-вашому.", is_required: false, default_privacy: "review_required" },
     { type: "long_text", prompt: "Як ви познайомилися або який ваш перший спільний спогад?", help_text: null, is_required: false, default_privacy: "review_required" },
@@ -56,6 +55,7 @@ const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prom
     { type: "long_text", prompt: "Яке слово найкраще описує їх разом і чому?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required" },
     { type: "long_text", prompt: "Яке побажання, прогноз або дружню пораду ви хочете залишити?", help_text: null, is_required: false, default_privacy: "review_required" },
     { type: "long_text", prompt: "Чого ведучому точно не варто згадувати або показувати публічно?", help_text: "Цю відповідь бачить лише ведучий.", is_required: false, default_privacy: "host_only" },
+    { type: "media", prompt: "Додайте фото, відео або аудіо для героїв події", help_text: "До 10 файлів. Усе спочатку побачить і перевірить ведучий.", is_required: false, default_privacy: "review_required" },
   ],
 };
 
@@ -145,7 +145,10 @@ export async function createQuestionnaireAction(
       await supabaseRest(`questionnaires?id=eq.${questionnaireId}&event_id=eq.${eventId}`, {
         method: "PATCH",
         accessToken,
-        body: JSON.stringify({ description: sourceDescription.slice(0, 2000) }),
+        body: JSON.stringify({
+          description: sourceDescription.slice(0, 2000),
+          ...(starterKey === "guest" ? { allow_images: true, allow_video: true, allow_audio: true } : {}),
+        }),
       });
     }
     return { questionnaireId: createdQuestionnaireId };

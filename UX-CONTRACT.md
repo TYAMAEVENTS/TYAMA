@@ -24,6 +24,10 @@ Visual source: `DESIGN.md`. Business and security sources: handoff `02`, `03`, `
 | Archive | `Архівувати` | pessimistic server action | dashboard + restore path | persistent error | next Event/dashboard heading |
 | Public submit | `Надіслати відповіді` | idempotent busy | clear success state | preserve entered data | error summary / success heading |
 
+Guest questionnaires use one question per step with visible progress, Back, and Skip for optional questions. Customer/couple questionnaires remain a continuous long form because they are completed deliberately rather than in a live guest setting. Media is a visible optional guest step and uploads only after the text submission succeeds.
+
+The Event workspace opens with a three-step launchpad: share the published guest questionnaire, review responses, then prepare or rehearse public-safe Event Kit items. Full sections remain available below as secondary tools.
+
 ## Security and privacy UI
 
 - UI hiding never replaces server/RLS authorization.

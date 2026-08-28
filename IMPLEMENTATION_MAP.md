@@ -1,5 +1,12 @@
 # Internal Implementation Map
 
+## 2026-08-28 guest and host UX pass
+
+- Guest questionnaires render one question per screen; optional questions have `Пропустити`, while customer questionnaires keep the full-form workflow.
+- New guest questionnaires include an optional media step and enable image, video, and audio uploads. Migration `20260828120000_add_media_to_guest_questionnaires.sql` adds the same capability to existing guest questionnaires without duplicating media questions.
+- Event workspace now starts with a three-step launchpad for guest QR, response review, and Event Kit/rehearsal readiness.
+- Answer review has three one-click decisions with advanced privacy/moderation controls preserved under disclosure.
+
 Source: `TYAMA_PILOT_SVIAT_HANDOFF_v3`, with legacy-repository requirements explicitly cancelled by the owner on 2026-08-26.
 
 ## P0 vertical slices
