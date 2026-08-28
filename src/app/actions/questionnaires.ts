@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
+import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
 import { capabilityHash, questionnaireToken } from "@/lib/questionnaires/tokens";
 import {
@@ -42,11 +43,31 @@ const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prom
   ],
   guest: [
     { type: "short_text", prompt: "Як вас звати?", help_text: null, is_required: true, default_privacy: "host_only" },
-    { type: "short_text", prompt: "Ким ви доводитесь героям події?", help_text: null, is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Розкажіть історію, яку варто згадати на святі.", help_text: "Без хвилювань: спочатку все перегляне ведучий.", is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Що про героїв події знаєте тільки ви?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "short_text", prompt: "Ким ви доводитесь героям події та як давно ви знайомі?", help_text: null, is_required: true, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Якими трьома словами ви б описали героїв події?", help_text: "Можна серйозно, смішно або дуже по-вашому.", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Як ви познайомилися або який ваш перший спільний спогад?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Розкажіть історію, яку варто згадати на святі.", help_text: "Додайте деталі й фінал. Спочатку все перегляне ведучий.", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Яка їхня звичка, фраза або риса одразу видає їх серед інших?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Який талант, суперсила або неочевидна навичка у них є?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Що про героїв події знаєте тільки ви?", help_text: "Не пишіть те, що може образити або нашкодити.", is_required: false, default_privacy: "host_only" },
+    { type: "long_text", prompt: "Який момент із ними ви хотіли б пережити ще раз?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Яка пісня, фільм, мем або фраза у вас із ними асоціюється?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Що вони найімовірніше зроблять у спільний вільний день?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Яке слово найкраще описує їх разом і чому?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Яке побажання, прогноз або дружню пораду ви хочете залишити?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Чого ведучому точно не варто згадувати або показувати публічно?", help_text: "Цю відповідь бачить лише ведучий.", is_required: false, default_privacy: "host_only" },
   ],
 };
+
+function contextualGuestQuestions(signal: string) {
+  const value = signal.toLowerCase();
+  const questions: typeof STARTERS.guest = [];
+  if (/подорож|мандр|країн|міст|пригод/.test(value)) questions.push({ type: "long_text", prompt: "Яка спільна подорож або пригода найкраще їх характеризує?", help_text: null, is_required: false, default_privacy: "review_required" });
+  if (/родин|сімейн|традиц|батьк|мам|дід|баб/.test(value)) questions.push({ type: "long_text", prompt: "Яка родинна історія або традиція пов’язує вас із героями події?", help_text: null, is_required: false, default_privacy: "review_required" });
+  if (/музик|пісн|танц|концерт/.test(value)) questions.push({ type: "long_text", prompt: "Яка музична історія, пісня або танець точно про них?", help_text: null, is_required: false, default_privacy: "review_required" });
+  if (/робот|професі|університет|школ|навчан/.test(value)) questions.push({ type: "long_text", prompt: "Яка історія з роботи або навчання показує їх справжніми?", help_text: null, is_required: false, default_privacy: "review_required" });
+  return questions.slice(0, 3);
+}
 
 export type QuestionnaireActionState = { error?: string; questionnaireId?: string };
 
@@ -62,7 +83,7 @@ async function hostContext(eventId: string) {
   if (!accessToken) redirect("/login");
   const event = await getEvent(eventId);
   if (!event || event.host_id !== user.id) throw new Error("Event not found");
-  return { user, accessToken };
+  return { user, accessToken, event };
 }
 
 export async function createQuestionnaireAction(
@@ -70,7 +91,7 @@ export async function createQuestionnaireAction(
   _: QuestionnaireActionState,
   formData: FormData,
 ): Promise<QuestionnaireActionState> {
-  const { accessToken } = await hostContext(eventId);
+  const { accessToken, event } = await hostContext(eventId);
   const audienceValue = String(formData.get("audience") ?? "guest");
   const audience = QUESTIONNAIRE_AUDIENCES.includes(audienceValue as QuestionnaireAudience)
     ? (audienceValue as QuestionnaireAudience)
@@ -80,7 +101,29 @@ export async function createQuestionnaireAction(
 
   try {
     const starterKey = audience === "guest" || audience === "other" ? "guest" : "customer";
-    const questions = STARTERS[starterKey].map((question, index) => ({
+    const buildMode = String(formData.get("guestBuildMode") ?? "host_brief");
+    const hostBrief = String(formData.get("hostBrief") ?? "").trim().slice(0, 4000);
+    let starter = STARTERS[starterKey];
+    let sourceDescription: string | null = null;
+    if (starterKey === "guest") {
+      let signal = `${event.title} ${event.client_name ?? ""} ${event.event_type} ${hostBrief}`;
+      if (buildMode === "customer_context") {
+        const submissions = await listEventSubmissions(eventId);
+        const customerSubmissions = submissions.filter((submission) =>
+          submission.questionnaire && ["customer", "couple", "bride", "groom"].includes(submission.questionnaire.audience),
+        );
+        signal += " " + customerSubmissions.flatMap((submission) => submission.answers.flatMap((answer) => [answer.question?.prompt ?? "", answer.answer_text ?? ""])).join(" ");
+        sourceDescription = customerSubmissions.length
+          ? "Guest-анкета зібрана з базової структури та сигналів із відповідей замовників. Перед публікацією перевірте формулювання й приватність."
+          : "Відповідей замовників ще немає, тому використано повну базову guest-структуру та дані події. Додайте деталі ведучого перед публікацією."
+      } else {
+        sourceDescription = hostBrief
+          ? "Guest-анкета сформована з приватного брифу ведучого та даних події. Бриф не публікується; перевірте питання перед публікацією."
+          : "Повна базова guest-анкета сформована з даних події. Додайте або змініть питання перед публікацією.";
+      }
+      starter = [...STARTERS.guest, ...contextualGuestQuestions(signal)];
+    }
+    const questions = starter.map((question, index) => ({
       ...question,
       sort_order: (index + 1) * 10,
     }));
@@ -98,6 +141,13 @@ export async function createQuestionnaireAction(
       }),
     });
     if (createdQuestionnaireId !== questionnaireId) return { error: "Анкету не створено. Спробуйте ще раз." };
+    if (sourceDescription) {
+      await supabaseRest(`questionnaires?id=eq.${questionnaireId}&event_id=eq.${eventId}`, {
+        method: "PATCH",
+        accessToken,
+        body: JSON.stringify({ description: sourceDescription.slice(0, 2000) }),
+      });
+    }
     return { questionnaireId: createdQuestionnaireId };
   } catch {
     return { error: "Анкету не створено. Введені дані лишилися у формі — спробуйте ще раз." };
