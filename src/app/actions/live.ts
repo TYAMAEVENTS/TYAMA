@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { capabilityHash, publicScreenToken } from "@/lib/questionnaires/tokens";
-import { findFamilyFeudOriginal, hideFamilyFeudGem, revealFamilyFeudGemAuthor, revealNextFamilyFeudAnswer, showFamilyFeudGem } from "@/lib/event-kit/family-feud";
+import { findFamilyFeudOriginal, hideFamilyFeudGem, revealFamilyFeudAnswerAt, revealFamilyFeudGemAuthor, revealNextFamilyFeudAnswer, showFamilyFeudGem } from "@/lib/event-kit/family-feud";
+import { findWhoSaidCandidate, hideWhoSaidAuthor, revealWhoSaidCandidate } from "@/lib/event-kit/who-said";
 import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
 
@@ -87,7 +88,8 @@ export async function showInteractiveIntroAction(eventId: string, itemId: string
     const { gem_author: _hiddenAuthor, selected_gem: _hiddenGem, ...safeData } = data;
     void _hiddenAuthor;
     void _hiddenGem;
-    return { ...safeData, stage: "intro", revealed: false, revealed_count: 0, gem_visible: false, gem_author_visible: false };
+    const publicSafe = data.interactive_kind === "who_said" ? hideWhoSaidAuthor(safeData) : safeData;
+    return { ...publicSafe, stage: "intro", revealed: false, revealed_count: 0, revealed_indexes: [], gem_visible: false, gem_author_visible: false };
   });
 }
 
@@ -97,7 +99,8 @@ export async function startInteractiveAction(eventId: string, itemId: string) {
     const { gem_author: _hiddenAuthor, selected_gem: _hiddenGem, ...safeData } = data;
     void _hiddenAuthor;
     void _hiddenGem;
-    return { ...safeData, stage: "question", revealed: false, revealed_count: 0, gem_visible: false, gem_author_visible: false };
+    const publicSafe = data.interactive_kind === "who_said" ? hideWhoSaidAuthor(safeData) : safeData;
+    return { ...publicSafe, stage: "question", revealed: false, revealed_count: 0, revealed_indexes: [], gem_visible: false, gem_author_visible: false };
   });
 }
 
@@ -111,7 +114,7 @@ async function familyFeudGemContext(eventId: string, itemId: string) {
     listEventSubmissions(eventId),
   ]);
   const item = items[0];
-  if (!item || item.item_type !== "interactive" || item.data.interactive_kind !== "family_feud" || item.data.generator !== "family_feud_v3") return null;
+  if (!item || item.item_type !== "interactive" || item.data.interactive_kind !== "family_feud" || !["family_feud_v3", "family_feud_v4"].includes(String(item.data.generator))) return null;
   const selectedId = item.source_refs.find((ref) => ref.type === "family_feud_selected_gem")?.id;
   if (!selectedId) return null;
   const original = findFamilyFeudOriginal(submissions, selectedId);
@@ -180,6 +183,41 @@ export async function revealInteractiveAction(eventId: string, itemId: string) {
     method: "PATCH",
     accessToken,
     body: JSON.stringify({ data }),
+  });
+  await supabaseRest<number>("rpc/show_event_kit_item_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ p_event_id: eventId, p_item_id: itemId }),
+  });
+  refreshLiveRoutes(eventId);
+}
+
+export async function revealFamilyFeudAnswerAction(eventId: string, itemId: string, answerIndex: number) {
+  await updateItemData(eventId, itemId, (data, itemType) => {
+    if (itemType !== "interactive" || data.interactive_kind !== "family_feud" || data.generator !== "family_feud_v4") return null;
+    return revealFamilyFeudAnswerAt(data, Number(answerIndex));
+  });
+}
+
+export async function revealWhoSaidAuthorAction(eventId: string, itemId: string) {
+  const { accessToken } = await hostContext(eventId);
+  const [items, submissions] = await Promise.all([
+    supabaseRest<Array<{ data: Record<string, unknown>; item_type: string; source_refs: Array<{ type: string; id: string }> }>>(
+      `event_kit_items?select=data,item_type,source_refs&id=eq.${itemId}&event_id=eq.${eventId}&limit=1`,
+      { accessToken },
+    ),
+    listEventSubmissions(eventId),
+  ]);
+  const item = items[0];
+  if (!item || item.item_type !== "interactive" || item.data.generator !== "who_said_v3") return;
+  const answerId = item.source_refs.find((ref) => ref.type === "answer")?.id;
+  if (!answerId) return;
+  const candidate = findWhoSaidCandidate(submissions, answerId);
+  if (!candidate) return;
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ data: revealWhoSaidCandidate(item.data, candidate) }),
   });
   await supabaseRest<number>("rpc/show_event_kit_item_tx", {
     method: "POST",

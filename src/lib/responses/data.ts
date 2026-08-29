@@ -19,7 +19,7 @@ export type EventSubmission = {
     moderation_status: "pending" | "approved" | "rejected";
     is_useful: boolean;
     do_not_use: boolean;
-    question: { prompt: string; type: QuestionType } | null;
+    question: { id: string; prompt: string; type: QuestionType; settings: import("@/lib/questionnaires/content-intents").QuestionContentSettings } | null;
     media_assets: MediaAsset[];
   }>;
 };
@@ -28,7 +28,7 @@ export async function listEventSubmissions(eventId: string): Promise<EventSubmis
   const accessToken = await getAccessToken();
   if (!accessToken) return [];
   return supabaseRest<EventSubmission[]>(
-    `submissions?select=id,status,submitted_at,created_at,respondent:respondents(display_name,relationship_label),questionnaire:questionnaires(title,audience),answers(id,answer_text,answer_json,privacy_status,moderation_status,is_useful,do_not_use,question:questions(prompt,type),media_assets(id,kind,original_filename,mime_type,size_bytes,status,privacy_status,moderation_status))&event_id=eq.${encodeURIComponent(eventId)}&status=neq.draft&order=created_at.desc`,
+    `submissions?select=id,status,submitted_at,created_at,respondent:respondents(display_name,relationship_label),questionnaire:questionnaires(title,audience),answers(id,answer_text,answer_json,privacy_status,moderation_status,is_useful,do_not_use,question:questions(id,prompt,type,settings),media_assets(id,kind,original_filename,mime_type,size_bytes,status,privacy_status,moderation_status))&event_id=eq.${encodeURIComponent(eventId)}&status=neq.draft&order=created_at.desc`,
     { accessToken },
   );
 }

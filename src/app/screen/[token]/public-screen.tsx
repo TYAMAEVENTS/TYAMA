@@ -12,18 +12,28 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
   const data = payload.data ?? {};
   const kind = String(data.interactive_kind ?? "");
   const [media, setMedia] = useState<{ url: string; kind: string; mime_type: string } | null>(null);
+  const [previousMedia, setPreviousMedia] = useState<{ url: string; kind: string; mime_type: string } | null>(null);
   const assetIds = Array.isArray(data.asset_ids) ? data.asset_ids.map(String) : [];
   const mediaIndex = Math.max(0, Math.min(Number(data.current_index ?? 0), Math.max(assetIds.length - 1, 0)));
   const assetId = assetIds[mediaIndex];
 
   useEffect(() => {
     let active = true;
-    if (kind !== "slideshow" || !assetId) return;
+    if (!(["slideshow", "who_said"].includes(kind)) || !assetId) return;
     fetch(`/api/public-screen/${encodeURIComponent(token)}/media/${encodeURIComponent(assetId)}`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((next) => { if (active) setMedia(next); })
-      .catch(() => { if (active) setMedia(null); });
+      .then((next) => { if (active) { setPreviousMedia(media); setMedia(next); } })
+      .catch(() => { if (active && !media) setMedia(null); });
+    if (kind === "slideshow" && assetIds.length > 1) {
+      const nextId = assetIds[(mediaIndex + 1) % assetIds.length];
+      fetch(`/api/public-screen/${encodeURIComponent(token)}/media/${encodeURIComponent(nextId)}`, { cache: "force-cache" })
+        .then((response) => response.ok ? response.json() : Promise.reject())
+        .then((next) => { if (next.kind === "image") { const preload = new window.Image(); preload.src = next.url; } })
+        .catch(() => undefined);
+    }
     return () => { active = false; };
+  // Keep the previous frame mounted until the newly signed asset is ready.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId, kind, token, state.revision]);
 
   if (data.stage === "intro") {
@@ -40,14 +50,16 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
 
   if (kind === "family_feud") {
     const answers = (Array.isArray(data.answers) ? data.answers : []) as BoardAnswer[];
-    const revealed = Number(data.revealed_count ?? 0);
+    const v4Revealed = new Set(Array.isArray(data.revealed_indexes) ? data.revealed_indexes.map(Number) : []);
+    const legacyRevealed = Number(data.revealed_count ?? 0);
+    const isRevealed = (index: number) => data.generator === "family_feud_v4" ? v4Revealed.has(index) : index < legacyRevealed;
     const gemVisible = Boolean(data.gem_visible) && typeof data.selected_gem === "string";
     const authorVisible = gemVisible && Boolean(data.gem_author_visible) && typeof data.gem_author === "string";
-    return <div className="screen-content screen-content--board"><span className="eyebrow">100 ЗІ 100 / ВІДПОВІДІ ГОСТЕЙ</span><h1>{String(data.prompt ?? payload.title ?? "100 зі 100")}</h1><ol className="family-board">{answers.map((answer, index) => <li className={index < revealed ? "is-revealed" : ""} key={`${answer.label}-${index}`}><span>{index + 1}</span><strong>{index < revealed ? answer.label : "••••••••"}</strong><b>{index < revealed ? answer.points : "?"}</b></li>)}</ol>{gemVisible ? <aside className="family-gem"><span>ГОСТІ ТАКОЖ СКАЗАЛИ</span><blockquote>«{String(data.selected_gem)}»</blockquote>{authorVisible ? <strong>{String(data.gem_author)}</strong> : <small>Хто це міг сказати?</small>}</aside> : null}</div>;
+    return <div className="screen-content screen-content--board"><span className="eyebrow">100 ЗІ 100 / ВІДПОВІДІ ГОСТЕЙ</span><h1>{String(data.prompt ?? payload.title ?? "100 зі 100")}</h1><ol className="family-board">{answers.map((answer, index) => <li className={isRevealed(index) ? "is-revealed" : ""} key={`${answer.label}-${index}`}><span>{index + 1}</span><strong>{isRevealed(index) ? answer.label : "••••••••"}</strong><b>{isRevealed(index) ? answer.points : "?"}</b></li>)}</ol>{gemVisible ? <aside className="family-gem"><span>ГОСТІ ТАКОЖ СКАЗАЛИ</span><blockquote>«{String(data.selected_gem)}»</blockquote>{authorVisible ? <strong>{String(data.gem_author)}</strong> : <small>Хто це міг сказати?</small>}</aside> : null}</div>;
   }
   if (kind === "who_said") {
     const revealed = Boolean(data.revealed);
-    return <div className="screen-content screen-content--quote"><span className="eyebrow">ХТО ЦЕ СКАЗАВ?</span><blockquote>«{String(data.quote ?? payload.content ?? "")}»</blockquote>{revealed ? <div className="quote-author"><span>ПРАВИЛЬНА ВІДПОВІДЬ</span><strong>{String(data.author ?? "Гість")}</strong></div> : <p>Хто міг це написати?</p>}</div>;
+    return <div className="screen-content screen-content--quote"><span className="eyebrow">ХТО ЦЕ СКАЗАВ?</span><blockquote>«{String(data.quote ?? payload.content ?? "")}»</blockquote>{revealed ? <div className="quote-author">{media ? <img src={media.url} alt="Автор відповіді" /> : <div className="quote-author__empty">Без фото</div>}<span>ПРАВИЛЬНА ВІДПОВІДЬ</span><strong>{String(data.author ?? "Гість")}</strong></div> : <p>Хто міг це написати?</p>}</div>; // eslint-disable-line @next/next/no-img-element
   }
   if (kind === "dilettantes") {
     if (data.stage === "wheel") {
@@ -60,7 +72,8 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
     return <div className="screen-content screen-content--number"><span className="eyebrow">КЛУБ ДИЛЕТАНТІВ</span><h1>{payload.title}</h1><p>{payload.content}</p>{revealed ? <div className="number-answer"><span>ПРАВИЛЬНА ВІДПОВІДЬ</span><strong>{String(data.correct_answer ?? "—")} {String(data.unit ?? "")}</strong>{data.consequence ? <small>Найдальша відповідь: {String(data.consequence)}</small> : null}</div> : <div className="number-wait">Напишіть свою версію числа</div>}</div>;
   }
   if (kind === "slideshow") {
-    return <div className="screen-content screen-content--slideshow"><span className="eyebrow">СЛАЙДШОУ / {mediaIndex + 1} З {assetIds.length}</span>{!media ? <div className="media-loading">Завантажуємо файл…</div> : media.kind === "video" ? <video src={media.url} autoPlay controls playsInline /> : media.kind === "audio" ? <audio src={media.url} autoPlay controls /> : <img src={media.url} alt="Фото гостя для слайдшоу" />}</div>; // eslint-disable-line @next/next/no-img-element
+    const shown = media ?? previousMedia;
+    return <div className="screen-content screen-content--slideshow"><span className="eyebrow">СЛАЙДШОУ / {mediaIndex + 1} З {assetIds.length}</span>{!shown ? <div className="media-loading">Завантажуємо файл…</div> : shown.kind === "video" ? <video key={shown.url} src={shown.url} autoPlay controls playsInline /> : shown.kind === "audio" ? <audio key={shown.url} src={shown.url} autoPlay controls /> : <div className="slideshow-frame" key={shown.url}><img className="slideshow-frame__backdrop" src={shown.url} alt="" aria-hidden="true" /><img className="slideshow-frame__image" src={shown.url} alt="Фото гостя для слайдшоу" /></div>}</div>; // eslint-disable-line @next/next/no-img-element
   }
   return <div className="screen-content screen-content--blocked"><span className="eyebrow">ТЯМА / LIVE</span><h1>Оберіть інтерактив</h1><p>Сирі відповіді гостей не показуються на екрані.</p></div>;
 }
@@ -84,7 +97,7 @@ export function PublicScreen({ initialState, token }: { initialState: PublicScre
         if (active) setConnected(false);
       }
     };
-    const timer = window.setInterval(poll, 2000);
+    const timer = window.setInterval(poll, 750);
     return () => { active = false; window.clearInterval(timer); };
   }, [token]);
 
@@ -94,7 +107,7 @@ export function PublicScreen({ initialState, token }: { initialState: PublicScre
     <main className={`screen-page screen-page--${state.mode}`}>
       <header className="screen-header"><span>ТЯМА / LIVE CONTEXT</span><span>{payload.session_mode === "rehearsal" ? "РЕПЕТИЦІЯ" : state.event_title}</span></header>
       <section className="screen-stage" aria-live="polite">
-        {cleared ? <div className="screen-idle"><span className="screen-idle__signal" /><h1>ТЯМА</h1><p>Контекст уже збирається.</p></div> : <StructuredContent key={state.revision} state={state} token={token} />}
+        {cleared ? <div className="screen-idle"><span className="screen-idle__signal" /><h1>ТЯМА</h1><p>Контекст уже збирається.</p></div> : <StructuredContent state={state} token={token} />}
       </section>
       <footer className="screen-footer"><span>REV {String(state.revision).padStart(3, "0")}</span><span>{connected ? "SIGNAL OK" : "LAST KNOWN STATE"}</span></footer>
     </main>

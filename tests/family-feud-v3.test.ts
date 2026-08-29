@@ -6,7 +6,7 @@ import {
   revealFamilyFeudGemAuthor,
   revealNextFamilyFeudAnswer,
   showFamilyFeudGem,
-// @ts-ignore Node 22 strip-types test intentionally imports the TypeScript source directly.
+// @ts-expect-error Node 22 strip-types test intentionally imports the TypeScript source directly.
 } from "../src/lib/event-kit/family-feud.ts";
 
 type EventSubmission = Parameters<typeof buildFamilyFeudAnalyses>[0][number];
@@ -29,13 +29,13 @@ function submission(id: string, value: string, respondent = `Гість ${id}`):
       moderation_status: "approved",
       is_useful: true,
       do_not_use: false,
-      question: { prompt, type: "short_text" },
+      question: { id: "question-1", prompt, type: "short_text", settings: {} },
       media_assets: [],
     }],
   };
 }
 
-test("family_feud_v3 builds real TOP-4, preserves originals and keeps non-top Gems", () => {
+test("family_feud grouping preserves originals and keeps non-board interesting answers", () => {
   const records = [
     submission("1", "Запізнюється"),
     submission("2", "спізнюється"),
@@ -49,7 +49,7 @@ test("family_feud_v3 builds real TOP-4, preserves originals and keeps non-top Ge
   const before = JSON.stringify(records);
   const analysis = buildFamilyFeudAnalyses(records)[0];
   assert.equal(analysis.lowPotential, false);
-  assert.equal(analysis.top.length, 4);
+  assert.equal(analysis.top.length, 6);
   assert.equal(analysis.top.find((group) => group.key === "запізнюється")?.points, 2);
   assert.equal(analysis.top.find((group) => group.key === "смішить усіх")?.points, 2);
   assert.equal(analysis.groups.reduce((sum, group) => sum + group.points, 0), 8);

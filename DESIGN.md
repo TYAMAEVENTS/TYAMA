@@ -58,7 +58,7 @@ Unbounded is the intended display face and Manrope the intended UI face. Until l
 
 ## Layout
 
-Full-field acid canvas, hairline black rules, zero-radius panels, 9px rhythm with 26px working gaps and up to 54px section framing. Public questionnaires are single-column mobile-first. Host workspace is desktop-first with route-backed navigation and a natural document scroll owner.
+Full-field acid canvas, hairline black rules, zero-radius panels, 9px rhythm with 26px working gaps and up to 54px section framing. Public questionnaires are single-column mobile-first. Host workspace is desktop-first with route-backed navigation and a natural document scroll owner. Event-operation surfaces (`Responses → Event Kit → Rehearsal → Live`) are the deliberate mobile-first exception: compact single-column cards, 44px minimum targets, and dominant primary show/reveal actions.
 
 ## Elevation & Depth
 
@@ -78,4 +78,4 @@ Runtime tokens are canonical in `src/app/globals.css`; this document mirrors exa
 - Do use black/yellow contrast and hairline structure.
 - Do preserve visible focus, error text, and semantic states.
 - Don't spread the glitch through form controls or dense response content.
-- Don't introduce radius, shadow, generic neutral cards, or animation beyond quick opacity changes.
+- Don't introduce radius, shadow, or generic neutral cards. Audience slideshow may use restrained crossfade and image drift; workspace motion remains limited to quick state feedback.

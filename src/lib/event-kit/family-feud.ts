@@ -1,8 +1,9 @@
 import type { EventSubmission } from "@/lib/responses/data";
+import type { ContentIntent, QuestionContentSettings } from "@/lib/questionnaires/content-intents";
 
 export const FAMILY_FEUD_MIN_USABLE_ANSWERS = 4;
 export const FAMILY_FEUD_MIN_GROUPS = 4;
-export const FAMILY_FEUD_TOP_SIZE = 4;
+export const FAMILY_FEUD_TOP_SIZE = 6;
 
 const MEANINGLESS = new Set(["не знаю", "не знаю що сказати", "хз", "нема", "нічого", "без відповіді"]);
 const OBVIOUS_UNSAFE = /(?:^|\s)(хуй|пизд|блят|їбат|єбат|довбойоб|дебіл|ідіот|лох|сука|курва)[\p{L}\p{N}_]*/iu;
@@ -20,6 +21,11 @@ const SAFE_ALIASES = new Map<string, string>([
   ["усіх смішить", "смішить усіх"],
   ["всіх смішить", "смішить усіх"],
 ]);
+
+function contentIntents(settings: QuestionContentSettings | null | undefined): ContentIntent[] {
+  const raw = settings?.content_intents;
+  return Array.isArray(raw) ? raw : [];
+}
 
 export type FamilyFeudOriginal = {
   id: string;
@@ -73,13 +79,20 @@ export function isFamilyFeudPromptEligible(prompt: string) {
   return Boolean(prompt.trim()) && !NON_SURVEY_PROMPT.test(prompt) && !STORY_PROMPT.test(prompt) && !WHO_SAID_PROMPT.test(prompt);
 }
 
+function isFamilyFeudQuestionEligible(answer: EventSubmission["answers"][number]) {
+  const settings = answer.question?.settings;
+  const intents = contentIntents(settings);
+  if (intents.length) return intents.includes("family_feud");
+  return isFamilyFeudPromptEligible(answer.question?.prompt ?? "");
+}
+
 export function buildFamilyFeudAnalyses(submissions: EventSubmission[]): FamilyFeudAnalysis[] {
-  const byPrompt = new Map<string, FamilyFeudOriginal[]>();
+  const byQuestion = new Map<string, { prompt: string; originals: FamilyFeudOriginal[] }>();
   for (const submission of submissions) {
     for (const answer of submission.answers) {
       const prompt = answer.question?.prompt?.trim() ?? "";
       const value = answerValue(answer);
-      if (!isFamilyFeudPromptEligible(prompt)
+      if (!isFamilyFeudQuestionEligible(answer)
         || answer.question?.type === "media"
         || answer.do_not_use
         || answer.moderation_status !== "approved"
@@ -92,11 +105,14 @@ export function buildFamilyFeudAnalyses(submissions: EventSubmission[]): FamilyF
         respondent: submission.respondent?.display_name?.trim() || "Без імені",
         groupKey,
       };
-      byPrompt.set(prompt, [...(byPrompt.get(prompt) ?? []), original]);
+      const questionKey = answer.question?.id ?? prompt;
+      const entry = byQuestion.get(questionKey) ?? { prompt, originals: [] };
+      entry.originals.push(original);
+      byQuestion.set(questionKey, entry);
     }
   }
 
-  return [...byPrompt.entries()].map(([prompt, originals]) => {
+  return [...byQuestion.values()].map(({ prompt, originals }) => {
     const grouped = new Map<string, FamilyFeudOriginal[]>();
     for (const original of originals) grouped.set(original.groupKey, [...(grouped.get(original.groupKey) ?? []), original]);
     const groups = [...grouped.entries()]
@@ -161,6 +177,23 @@ export function revealNextFamilyFeudAnswer(data: Record<string, unknown>) {
     revealed_count: Math.min(Number(data.revealed_count ?? 0) + 1, answers.length),
     stage: "reveal",
   };
+}
+
+export function revealFamilyFeudAnswerAt(data: Record<string, unknown>, index: number) {
+  const answers = Array.isArray(data.answers) ? data.answers : [];
+  if (data.generator !== "family_feud_v4" || index < 0 || index >= answers.length) return data;
+  const revealed = Array.isArray(data.revealed_indexes)
+    ? data.revealed_indexes.map(Number).filter((value) => Number.isInteger(value) && value >= 0 && value < answers.length)
+    : [];
+  return { ...data, stage: "reveal", revealed_indexes: [...new Set([...revealed, index])].sort((a, b) => a - b) };
+}
+
+export function replaceFamilyFeudBoardSlot(data: Record<string, unknown>, slotIndex: number, group: FamilyFeudGroup) {
+  const answers = Array.isArray(data.answers) ? [...data.answers] : [];
+  if (data.generator !== "family_feud_v4" || slotIndex < 0 || slotIndex >= answers.length) return data;
+  answers[slotIndex] = { label: group.label, points: group.points };
+  const revealed = Array.isArray(data.revealed_indexes) ? data.revealed_indexes.map(Number).filter((value) => value !== slotIndex) : [];
+  return { ...data, answers, revealed_indexes: revealed };
 }
 
 export function hideFamilyFeudGem(data: Record<string, unknown>) {

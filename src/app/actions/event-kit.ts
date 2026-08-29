@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { buildSmartEventKitDrafts } from "@/lib/event-kit/draft-builder";
-import { buildFamilyFeudAnalyses, findFamilyFeudAnalysis } from "@/lib/event-kit/family-feud";
+import { buildFamilyFeudAnalyses, findFamilyFeudAnalysis, replaceFamilyFeudBoardSlot } from "@/lib/event-kit/family-feud";
 import { EVENT_KIT_TYPES, type EventKitItem, type EventKitType } from "@/lib/event-kit/types";
 import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
@@ -112,9 +112,7 @@ export async function buildEventKitDraftsAction(
     const existingKeys = new Set(existing.flatMap((item) => typeof item.data.generator_key === "string" ? [item.data.generator_key] : []));
     const missing = drafts.filter((draft) => !existingKeys.has(draft.generatorKey));
     if (missing.length) {
-      const publicMediaIds = missing.flatMap((draft) => draft.itemType === "media"
-        ? draft.sourceRefs.filter((ref) => ref.type === "media_asset").map((ref) => ref.id)
-        : []);
+      const publicMediaIds = missing.flatMap((draft) => draft.sourceRefs.filter((ref) => ref.type === "media_asset").map((ref) => ref.id));
       if (publicMediaIds.length) {
         await supabaseRest(`media_assets?event_id=eq.${eventId}&id=in.(${publicMediaIds.join(",")})`, {
           method: "PATCH",
@@ -159,7 +157,7 @@ export async function selectFamilyFeudGemAction(eventId: string, itemId: string,
     listEventSubmissions(eventId),
   ]);
   const item = items[0];
-  if (!item || item.data.interactive_kind !== "family_feud" || item.data.generator !== "family_feud_v3") return;
+  if (!item || item.data.interactive_kind !== "family_feud" || !["family_feud_v3", "family_feud_v4"].includes(String(item.data.generator))) return;
   const sourceIds = item.source_refs.filter((ref) => ref.type === "answer").map((ref) => ref.id);
   const analysis = findFamilyFeudAnalysis(submissions, String(item.data.prompt ?? ""), sourceIds);
   const gem = analysis?.gems.find((candidate) => candidate.id === answerId);
@@ -178,6 +176,32 @@ export async function selectFamilyFeudGemAction(eventId: string, itemId: string,
       source_refs: sourceRefs,
       data: { ...safeData, gem_visible: false, gem_author_visible: false },
     }),
+  });
+  revalidatePath(`/events/${eventId}/event-kit`);
+  revalidatePath(`/events/${eventId}/rehearsal`);
+  revalidatePath(`/events/${eventId}/live`);
+}
+
+export async function replaceFamilyFeudBoardSlotAction(eventId: string, itemId: string, groupKey: string, slotIndex: number) {
+  const { accessToken } = await hostContext(eventId);
+  const [items, submissions] = await Promise.all([
+    supabaseRest<Array<Pick<EventKitItem, "data" | "source_refs">>>(
+      `event_kit_items?select=data,source_refs&id=eq.${itemId}&event_id=eq.${eventId}&item_type=eq.interactive&limit=1`,
+      { accessToken },
+    ),
+    listEventSubmissions(eventId),
+  ]);
+  const item = items[0];
+  if (!item || item.data.generator !== "family_feud_v4") return;
+  const sourceIds = item.source_refs.filter((ref) => ref.type === "answer").map((ref) => ref.id);
+  const analysis = findFamilyFeudAnalysis(submissions, String(item.data.prompt ?? ""), sourceIds);
+  const group = analysis?.groups.find((candidate) => candidate.key === groupKey);
+  if (!group) return;
+  const data = replaceFamilyFeudBoardSlot(item.data, Number(slotIndex), group);
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ data }),
   });
   revalidatePath(`/events/${eventId}/event-kit`);
   revalidatePath(`/events/${eventId}/rehearsal`);
@@ -220,6 +244,35 @@ export async function createDilettantesInteractiveAction(eventId: string, formDa
       is_useful: true,
       sort_order: (last[0]?.sort_order ?? 0) + 10,
     }),
+  });
+  revalidatePath(`/events/${eventId}/event-kit`);
+  revalidatePath(`/events/${eventId}/rehearsal`);
+  revalidatePath(`/events/${eventId}/live`);
+}
+
+export async function updateDilettantesInteractiveAction(eventId: string, itemId: string, formData: FormData) {
+  const { accessToken } = await hostContext(eventId);
+  const question = String(formData.get("question") ?? "").trim().slice(0, 500);
+  const correctAnswer = Number(String(formData.get("correctAnswer") ?? "").replace(",", "."));
+  const consequence = String(formData.get("consequence") ?? "").trim().slice(0, 300);
+  if (!question || !Number.isFinite(correctAnswer)) return;
+  const rows = await supabaseRest<Array<Pick<EventKitItem, "data">>>(
+    `event_kit_items?select=data&id=eq.${itemId}&event_id=eq.${eventId}&item_type=eq.interactive&limit=1`,
+    { accessToken },
+  );
+  const item = rows[0];
+  if (!item || item.data.interactive_kind !== "dilettantes") return;
+  const data = {
+    ...item.data,
+    question,
+    correct_answer: correctAnswer,
+    consequence: consequence || null,
+    wheel_options: consequence ? [consequence, ...DILETTANTES_WHEEL.filter((option) => option !== consequence).slice(0, 7)] : DILETTANTES_WHEEL,
+  };
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ title: "Клуб дилетантів", content: question, data }),
   });
   revalidatePath(`/events/${eventId}/event-kit`);
   revalidatePath(`/events/${eventId}/rehearsal`);

@@ -51,3 +51,11 @@ Pattern: `{Page} — ТЯМА`. Route-backed workspace sections remain bookmarka
 ## Responsive and accessibility
 
 Target WCAG 2.2 AA. Questionnaire works at narrow mobile widths; Host workspace works on a normal laptop; Public Screen works in a separate browser/display. Controls keep visible focus and 44px practical touch size. Reduced motion removes transforms and keeps only fast opacity changes.
+
+During an event, Host controls use one-hand mobile operation: primary actions first, technical controls collapsed, and no horizontal button overflow.
+
+## Questionnaire content intent
+
+- `questions.settings.content_intents` is the source of truth for `family_feud`, `who_said`, `story`, `media`, and `trivia` routing.
+- One question may have multiple intents. Prompt regexes are legacy fallback only when explicit intents are absent.
+- Who Said identity and selfie are reconstructed server-side from the same submission and enter public state only after explicit Host reveal.

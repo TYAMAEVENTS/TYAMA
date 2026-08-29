@@ -15,7 +15,9 @@ import {
   type QuestionType,
 } from "@/lib/questionnaires/types";
 
-const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prompt" | "help_text" | "is_required" | "default_privacy">>> = {
+type StarterQuestion = Pick<Question, "type" | "prompt" | "help_text" | "is_required" | "default_privacy"> & Pick<Partial<Question>, "settings">;
+
+const STARTERS: Record<"customer" | "guest", StarterQuestion[]> = {
   customer: [
     { type: "short_text", prompt: "Як до вас обох звертатися?", help_text: "Імена та бажана форма звертання.", is_required: true, default_privacy: "host_only" },
     { type: "long_text", prompt: "Опишіть вашу подію трьома словами.", help_text: "Не шукайте правильних слів — важливе ваше відчуття.", is_required: true, default_privacy: "review_required" },
@@ -44,18 +46,18 @@ const STARTERS: Record<"customer" | "guest", Array<Pick<Question, "type" | "prom
   guest: [
     { type: "short_text", prompt: "Ким ви доводитесь героям події та як давно ви знайомі?", help_text: null, is_required: true, default_privacy: "review_required" },
     { type: "long_text", prompt: "Якими трьома словами ви б описали героїв події?", help_text: "Можна серйозно, смішно або дуже по-вашому.", is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Як ви познайомилися або який ваш перший спільний спогад?", help_text: null, is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Розкажіть історію, яку варто згадати на святі.", help_text: "Додайте деталі й фінал. Спочатку все перегляне ведучий.", is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Яка їхня звичка, фраза або риса одразу видає їх серед інших?", help_text: null, is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Який талант, суперсила або неочевидна навичка у них є?", help_text: null, is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Як ви познайомилися або який ваш перший спільний спогад?", help_text: null, is_required: false, default_privacy: "review_required", settings: { content_intents: ["story"] } },
+    { type: "long_text", prompt: "Розкажіть історію, яку варто згадати на святі.", help_text: "Додайте деталі й фінал. Спочатку все перегляне ведучий.", is_required: false, default_privacy: "review_required", settings: { content_intents: ["story", "who_said"], who_said_priority: 50 } },
+    { type: "long_text", prompt: "Яка їхня звичка, фраза або риса одразу видає їх серед інших?", help_text: null, is_required: false, default_privacy: "review_required", settings: { content_intents: ["family_feud", "who_said"], who_said_priority: 30 } },
+    { type: "long_text", prompt: "Який талант, суперсила або неочевидна навичка у них є?", help_text: null, is_required: false, default_privacy: "review_required", settings: { content_intents: ["family_feud"] } },
     { type: "long_text", prompt: "Що про героїв події знаєте тільки ви?", help_text: "Не пишіть те, що може образити або нашкодити.", is_required: false, default_privacy: "host_only" },
     { type: "long_text", prompt: "Який момент із ними ви хотіли б пережити ще раз?", help_text: null, is_required: false, default_privacy: "review_required" },
     { type: "long_text", prompt: "Яка пісня, фільм, мем або фраза у вас із ними асоціюється?", help_text: null, is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Що вони найімовірніше зроблять у спільний вільний день?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required" },
-    { type: "long_text", prompt: "Яке слово найкраще описує їх разом і чому?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required" },
+    { type: "long_text", prompt: "Що вони найімовірніше зроблять у спільний вільний день?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required", settings: { content_intents: ["family_feud"] } },
+    { type: "long_text", prompt: "Яке слово найкраще описує їх разом і чому?", help_text: "Це питання може стати основою для «100 зі 100».", is_required: false, default_privacy: "review_required", settings: { content_intents: ["family_feud", "who_said"], who_said_priority: 20 } },
     { type: "long_text", prompt: "Яке побажання, прогноз або дружню пораду ви хочете залишити?", help_text: null, is_required: false, default_privacy: "review_required" },
     { type: "long_text", prompt: "Чого ведучому точно не варто згадувати або показувати публічно?", help_text: "Цю відповідь бачить лише ведучий.", is_required: false, default_privacy: "host_only" },
-    { type: "media", prompt: "Додайте фото, відео або аудіо для героїв події", help_text: "До 10 файлів. Усе спочатку побачить і перевірить ведучий.", is_required: false, default_privacy: "review_required" },
+    { type: "media", prompt: "Додайте фото, відео або аудіо для героїв події", help_text: "До 10 файлів. Усе спочатку побачить і перевірить ведучий.", is_required: false, default_privacy: "review_required", settings: { content_intents: ["media"] } },
   ],
 };
 
@@ -69,7 +71,7 @@ function contextualGuestQuestions(signal: string) {
   return questions.slice(0, 3);
 }
 
-function whoSaidQuestion(eventType: string) {
+function whoSaidQuestion(eventType: string): StarterQuestion {
   const subject = eventType === "wedding"
     ? "наречених"
     : eventType === "birthday"
@@ -83,6 +85,7 @@ function whoSaidQuestion(eventType: string) {
     help_text: "Ця фраза може потрапити у гру «Хто це сказав?». Ведучий не показуватиме її як звичайну відповідь.",
     is_required: false,
     default_privacy: "review_required" as const,
+    settings: { content_intents: ["who_said"], who_said_priority: 10, who_said_role: "quote" },
   };
 }
 

@@ -31,7 +31,7 @@ export type Question = {
   is_required: boolean;
   is_active: boolean;
   sort_order: number;
-  settings: { options?: string[] };
+  settings: import("@/lib/questionnaires/content-intents").QuestionContentSettings;
   default_privacy: "host_only" | "review_required" | "public_allowed";
   created_at: string;
   updated_at: string;
