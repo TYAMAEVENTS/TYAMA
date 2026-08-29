@@ -23,6 +23,7 @@ export function EventKitSmartBuilder({ eventId }: { eventId: string }) {
       {state.success ? <StatusMessage>{state.created
         ? `Створено ${state.created} інтерактивів${state.skipped ? `, пропущено дублікатів: ${state.skipped}` : ""}.`
         : "Усі доступні чернетки вже зібрані — дублікатів не створено."}</StatusMessage> : null}
+      {state.lowPotential ? <StatusMessage tone="error">LOW GAME POTENTIAL: {state.lowPotential} питань пропущено — замало змістовних відповідей або різних груп.</StatusMessage> : null}
       <Button type="submit" busy={pending}>Зібрати готові інтерактиви</Button>
     </form>
   );

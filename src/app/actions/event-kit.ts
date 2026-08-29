@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { buildSmartEventKitDrafts } from "@/lib/event-kit/draft-builder";
+import { buildFamilyFeudAnalyses, findFamilyFeudAnalysis } from "@/lib/event-kit/family-feud";
 import { EVENT_KIT_TYPES, type EventKitItem, type EventKitType } from "@/lib/event-kit/types";
 import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
@@ -32,6 +33,7 @@ export type BuildEventKitState = {
   success?: boolean;
   created?: number;
   skipped?: number;
+  lowPotential?: number;
   error?: string;
 };
 
@@ -102,8 +104,11 @@ export async function buildEventKitDraftsAction(
     const selectedSubmissions = selectedIds.size
       ? submissions.map((submission) => ({ ...submission, answers: submission.answers.filter((answer) => selectedIds.has(answer.id)) }))
       : submissions;
+    const lowPotential = buildFamilyFeudAnalyses(selectedSubmissions).filter((candidate) => candidate.lowPotential).length;
     const drafts = buildSmartEventKitDrafts(selectedSubmissions);
-    if (!drafts.length) return { error: "Поки немає достатньо безпечних відповідей для інтерактиву. Підозрілі відповіді лишилися в черзі перевірки." };
+    if (!drafts.length) return { error: lowPotential
+      ? `LOW GAME POTENTIAL: ${lowPotential} питань поки не мають щонайменше 4 змістовних відповідей і 4 різних груп.`
+      : "Поки немає достатньо безпечних відповідей для інтерактиву. Підозрілі відповіді лишилися в черзі перевірки." };
     const existingKeys = new Set(existing.flatMap((item) => typeof item.data.generator_key === "string" ? [item.data.generator_key] : []));
     const missing = drafts.filter((draft) => !existingKeys.has(draft.generatorKey));
     if (missing.length) {
@@ -138,10 +143,45 @@ export async function buildEventKitDraftsAction(
       });
     }
     revalidatePath(`/events/${eventId}/event-kit`);
-    return { success: true, created: missing.length, skipped: drafts.length - missing.length };
+    return { success: true, created: missing.length, skipped: drafts.length - missing.length, lowPotential };
   } catch {
     return { error: "Не вдалося зібрати чернетки. Raw answers і ручний Event Kit залишилися без змін." };
   }
+}
+
+export async function selectFamilyFeudGemAction(eventId: string, itemId: string, answerId: string) {
+  const { accessToken } = await hostContext(eventId);
+  const [items, submissions] = await Promise.all([
+    supabaseRest<Array<Pick<EventKitItem, "data" | "source_refs">>>(
+      `event_kit_items?select=data,source_refs&id=eq.${itemId}&event_id=eq.${eventId}&item_type=eq.interactive&limit=1`,
+      { accessToken },
+    ),
+    listEventSubmissions(eventId),
+  ]);
+  const item = items[0];
+  if (!item || item.data.interactive_kind !== "family_feud" || item.data.generator !== "family_feud_v3") return;
+  const sourceIds = item.source_refs.filter((ref) => ref.type === "answer").map((ref) => ref.id);
+  const analysis = findFamilyFeudAnalysis(submissions, String(item.data.prompt ?? ""), sourceIds);
+  const gem = analysis?.gems.find((candidate) => candidate.id === answerId);
+  if (!gem) return;
+  const sourceRefs = [
+    ...item.source_refs.filter((ref) => ref.type !== "family_feud_selected_gem"),
+    { type: "family_feud_selected_gem", id: gem.id },
+  ];
+  const { gem_author: _hiddenAuthor, selected_gem: _hiddenGem, ...safeData } = item.data;
+  void _hiddenAuthor;
+  void _hiddenGem;
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({
+      source_refs: sourceRefs,
+      data: { ...safeData, gem_visible: false, gem_author_visible: false },
+    }),
+  });
+  revalidatePath(`/events/${eventId}/event-kit`);
+  revalidatePath(`/events/${eventId}/rehearsal`);
+  revalidatePath(`/events/${eventId}/live`);
 }
 
 export async function createDilettantesInteractiveAction(eventId: string, formData: FormData) {

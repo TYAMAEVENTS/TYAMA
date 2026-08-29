@@ -41,7 +41,9 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
   if (kind === "family_feud") {
     const answers = (Array.isArray(data.answers) ? data.answers : []) as BoardAnswer[];
     const revealed = Number(data.revealed_count ?? 0);
-    return <div className="screen-content screen-content--board"><span className="eyebrow">100 ДО 1 / ВІДПОВІДІ ГОСТЕЙ</span><h1>{String(data.prompt ?? payload.title ?? "100 до 1")}</h1><ol className="family-board">{answers.map((answer, index) => <li className={index < revealed ? "is-revealed" : ""} key={`${answer.label}-${index}`}><span>{index + 1}</span><strong>{index < revealed ? answer.label : "••••••••"}</strong><b>{index < revealed ? answer.points : "?"}</b></li>)}</ol></div>;
+    const gemVisible = Boolean(data.gem_visible) && typeof data.selected_gem === "string";
+    const authorVisible = gemVisible && Boolean(data.gem_author_visible) && typeof data.gem_author === "string";
+    return <div className="screen-content screen-content--board"><span className="eyebrow">100 ЗІ 100 / ВІДПОВІДІ ГОСТЕЙ</span><h1>{String(data.prompt ?? payload.title ?? "100 зі 100")}</h1><ol className="family-board">{answers.map((answer, index) => <li className={index < revealed ? "is-revealed" : ""} key={`${answer.label}-${index}`}><span>{index + 1}</span><strong>{index < revealed ? answer.label : "••••••••"}</strong><b>{index < revealed ? answer.points : "?"}</b></li>)}</ol>{gemVisible ? <aside className="family-gem"><span>ГОСТІ ТАКОЖ СКАЗАЛИ</span><blockquote>«{String(data.selected_gem)}»</blockquote>{authorVisible ? <strong>{String(data.gem_author)}</strong> : <small>Хто це міг сказати?</small>}</aside> : null}</div>;
   }
   if (kind === "who_said") {
     const revealed = Boolean(data.revealed);

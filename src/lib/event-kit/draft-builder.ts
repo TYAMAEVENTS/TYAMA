@@ -1,5 +1,6 @@
 import type { EventKitType } from "@/lib/event-kit/types";
 import type { EventSubmission } from "@/lib/responses/data";
+import { buildFamilyFeudAnalyses } from "@/lib/event-kit/family-feud";
 
 export type SmartEventKitDraft = {
   generatorKey: string;
@@ -17,8 +18,6 @@ type UsableAnswer = {
   respondent: string;
 };
 
-const STORY_PROMPT = /істор|спогад|момент|сміш|кумед|познайом|пригад|випадок/i;
-const NON_SURVEY_PROMPT = /як вас звати|ваше ім['’]?я|email|e-mail|телефон|контакт|ким ви довод|ваша роль|дата народження/i;
 const WHO_SAID_PROMPT = /опишіть.+одн(ією|ою) фраз|трьома словами|яке слово найкраще описує/i;
 
 function answerValue(answer: EventSubmission["answers"][number]) {
@@ -49,37 +48,30 @@ function clip(value: string, length = 700) {
   return value.length > length ? `${value.slice(0, length - 1).trim()}…` : value;
 }
 
-function normalizedSurveyValue(value: string) {
-  return value.toLocaleLowerCase("uk-UA").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
-}
-
 export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartEventKitDraft[] {
   const answers = collectAnswers(submissions);
 
   const drafts: SmartEventKitDraft[] = [];
-  const grouped = new Map<string, UsableAnswer[]>();
-  for (const answer of answers) grouped.set(answer.prompt, [...(grouped.get(answer.prompt) ?? []), answer]);
-  const surveys = [...grouped.entries()]
-    .filter(([prompt, values]) => values.length >= 2 && !NON_SURVEY_PROMPT.test(prompt) && !STORY_PROMPT.test(prompt) && !WHO_SAID_PROMPT.test(prompt))
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 10);
-  for (const survey of surveys) {
-    const [prompt, values] = survey;
-    const answerGroups = new Map<string, { label: string; points: number }>();
-    for (const answer of values) {
-      const key = normalizedSurveyValue(answer.value);
-      if (!key) continue;
-      const current = answerGroups.get(key);
-      answerGroups.set(key, { label: current?.label ?? clip(answer.value, 90), points: (current?.points ?? 0) + 1 });
-    }
-    const board = [...answerGroups.values()].sort((a, b) => b.points - a.points).slice(0, 8);
-    if (board.length) drafts.push({
-      generatorKey: `smart-family-feud-v2:${prompt}`,
+  for (const analysis of buildFamilyFeudAnalyses(submissions).filter((candidate) => !candidate.lowPotential).slice(0, 10)) {
+    drafts.push({
+      generatorKey: `family-feud-v3:${analysis.prompt}`,
       itemType: "interactive",
-      title: "100 до 1",
-      content: prompt,
-      sourceRefs: values.map((answer) => ({ type: "answer", id: answer.id })),
-      data: { generator: "interactive_builder_v2", interactive_kind: "family_feud", stage: "intro", prompt, answers: board, revealed_count: 0, response_count: values.length },
+      title: "100 зі 100",
+      content: analysis.prompt,
+      sourceRefs: analysis.sourceAnswerIds.map((id) => ({ type: "answer", id })),
+      data: {
+        generator: "family_feud_v3",
+        schema_version: 3,
+        interactive_kind: "family_feud",
+        stage: "intro",
+        prompt: analysis.prompt,
+        answers: analysis.top.map((group) => ({ label: group.label, points: group.points })),
+        revealed_count: 0,
+        response_count: analysis.usableCount,
+        selected_gem: null,
+        gem_visible: false,
+        gem_author_visible: false,
+      },
     });
   }
 
