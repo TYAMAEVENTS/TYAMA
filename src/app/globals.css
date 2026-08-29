@@ -230,6 +230,21 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .event-kit-card__index { font-family: var(--font-display); font-size: 2rem; color: var(--coral); }
 .event-kit-card h2 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.8rem); }
 .event-kit-card__body { display: grid; gap: 18px; padding: 24px; }
+.family-host-panel { grid-column: 1 / -1; border-top: var(--line); padding: 22px; background: var(--paper); }
+.family-host-panel h3 { margin: 0; font-family: var(--font-display); font-size: 1.25rem; }
+.family-host-panel__legacy { grid-column: 1 / -1; margin: 0; padding: 14px 22px; border-top: var(--line); }
+.family-host-top { display: grid; gap: 8px; padding: 0; list-style: none; }
+.family-host-top li { display: grid; grid-template-columns: 38px 1fr 48px; gap: 10px; align-items: center; border-bottom: var(--line); padding: 10px 0; }
+.family-host-top b { text-align: right; color: var(--cobalt); }
+.family-host-inspectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.family-host-inspectors details { border: var(--line); padding: 14px; }
+.family-host-inspectors summary { cursor: pointer; font-weight: 900; }
+.family-host-groups article, .family-host-gems article { padding: 12px 0; border-top: var(--line); }
+.family-host-groups ul { padding-left: 20px; }
+.family-host-groups small { font-weight: 600; }
+.family-host-gems p { margin-bottom: 8px; }
+.family-host-selected { margin-top: 14px; border: 2px solid var(--cobalt); padding: 16px; }
+.family-host-selected blockquote { margin: 0 0 14px; font-size: 1.15rem; }
 .kit-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .kit-controls > label { display: grid; gap: 7px; font-size: 12px; }
 .kit-controls > .checkbox-field { display: flex; }
@@ -277,6 +292,10 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .family-board li > strong { padding: 0 20px; text-transform: uppercase; }
 .family-board li > b { border-right: 0; border-left: 2px solid currentColor; color: var(--coral); }
 .family-board li:not(.is-revealed) { opacity: .5; }
+.family-gem { margin-top: 2.5vh; border: 3px solid var(--coral); padding: clamp(16px, 2.5vw, 36px); background: var(--ink); }
+.family-gem > span { color: var(--coral); font-size: clamp(.75rem, 1.2vw, 1.1rem); letter-spacing: .08em; }
+.family-gem blockquote { margin: 12px 0; font-family: var(--font-display); font-size: clamp(1.35rem, 3vw, 3.5rem); }
+.family-gem strong, .family-gem small { display: block; }
 .screen-content--quote blockquote { max-width: 22ch; margin: 5vh 0 3vh; font-family: var(--font-display); font-size: clamp(3rem, 8vw, 9rem); line-height: .96; letter-spacing: -.05em; }
 .quote-author, .number-answer { display: inline-grid; gap: 8px; padding: 18px 24px; background: var(--coral); color: var(--ink); }
 .quote-author span, .number-answer span { font-size: clamp(10px, 1vw, 15px); }

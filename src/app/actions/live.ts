@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { capabilityHash, publicScreenToken } from "@/lib/questionnaires/tokens";
+import { findFamilyFeudOriginal, hideFamilyFeudGem, revealFamilyFeudGemAuthor, revealNextFamilyFeudAnswer, showFamilyFeudGem } from "@/lib/event-kit/family-feud";
+import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
 
 const SAFE_WHEEL_FALLBACK = [
@@ -82,15 +84,71 @@ async function updateItemData(eventId: string, itemId: string, mutate: (data: Re
 export async function showInteractiveIntroAction(eventId: string, itemId: string) {
   await updateItemData(eventId, itemId, (data, itemType) => {
     if (itemType !== "interactive" && itemType !== "media") return null;
-    return { ...data, stage: "intro", revealed: false, revealed_count: 0 };
+    const { gem_author: _hiddenAuthor, selected_gem: _hiddenGem, ...safeData } = data;
+    void _hiddenAuthor;
+    void _hiddenGem;
+    return { ...safeData, stage: "intro", revealed: false, revealed_count: 0, gem_visible: false, gem_author_visible: false };
   });
 }
 
 export async function startInteractiveAction(eventId: string, itemId: string) {
   await updateItemData(eventId, itemId, (data, itemType) => {
     if (itemType !== "interactive" && itemType !== "media") return null;
-    return { ...data, stage: "question", revealed: false, revealed_count: 0 };
+    const { gem_author: _hiddenAuthor, selected_gem: _hiddenGem, ...safeData } = data;
+    void _hiddenAuthor;
+    void _hiddenGem;
+    return { ...safeData, stage: "question", revealed: false, revealed_count: 0, gem_visible: false, gem_author_visible: false };
   });
+}
+
+async function familyFeudGemContext(eventId: string, itemId: string) {
+  const { accessToken } = await hostContext(eventId);
+  const [items, submissions] = await Promise.all([
+    supabaseRest<Array<{ data: Record<string, unknown>; item_type: string; source_refs: Array<{ type: string; id: string }> }>>(
+      `event_kit_items?select=data,item_type,source_refs&id=eq.${itemId}&event_id=eq.${eventId}&limit=1`,
+      { accessToken },
+    ),
+    listEventSubmissions(eventId),
+  ]);
+  const item = items[0];
+  if (!item || item.item_type !== "interactive" || item.data.interactive_kind !== "family_feud" || item.data.generator !== "family_feud_v3") return null;
+  const selectedId = item.source_refs.find((ref) => ref.type === "family_feud_selected_gem")?.id;
+  if (!selectedId) return null;
+  const original = findFamilyFeudOriginal(submissions, selectedId);
+  if (!original) return null;
+  return { accessToken, item, original };
+}
+
+async function publishFamilyFeudGemState(eventId: string, itemId: string, data: Record<string, unknown>, accessToken: string) {
+  await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({ data }),
+  });
+  await supabaseRest<number>("rpc/show_event_kit_item_tx", {
+    method: "POST",
+    accessToken,
+    body: JSON.stringify({ p_event_id: eventId, p_item_id: itemId }),
+  });
+  refreshLiveRoutes(eventId);
+}
+
+export async function showFamilyFeudGemAction(eventId: string, itemId: string) {
+  const context = await familyFeudGemContext(eventId, itemId);
+  if (!context) return;
+  await publishFamilyFeudGemState(eventId, itemId, showFamilyFeudGem(context.item.data, context.original.value), context.accessToken);
+}
+
+export async function hideFamilyFeudGemAction(eventId: string, itemId: string) {
+  const context = await familyFeudGemContext(eventId, itemId);
+  if (!context) return;
+  await publishFamilyFeudGemState(eventId, itemId, hideFamilyFeudGem(context.item.data), context.accessToken);
+}
+
+export async function revealFamilyFeudGemAuthorAction(eventId: string, itemId: string) {
+  const context = await familyFeudGemContext(eventId, itemId);
+  if (!context) return;
+  await publishFamilyFeudGemState(eventId, itemId, revealFamilyFeudGemAuthor(context.item.data, context.original.value, context.original.respondent), context.accessToken);
 }
 
 export async function spinDilettantesWheelAction(eventId: string, itemId: string) {
@@ -113,9 +171,7 @@ export async function revealInteractiveAction(eventId: string, itemId: string) {
   if (!item || item.item_type !== "interactive") return;
   const data = { ...item.data };
   if (data.interactive_kind === "family_feud") {
-    const answers = Array.isArray(data.answers) ? data.answers : [];
-    data.revealed_count = Math.min(Number(data.revealed_count ?? 0) + 1, answers.length);
-    data.stage = "reveal";
+    Object.assign(data, revealNextFamilyFeudAnswer(data));
   } else {
     data.revealed = true;
     data.stage = "reveal";
