@@ -1,13 +1,19 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
+import { buildWelcomeQrPayload } from "@/lib/live/welcome";
 import { capabilityHash, publicScreenToken } from "@/lib/questionnaires/tokens";
+import { publicQuestionnaireUrl } from "@/lib/questionnaires/tokens";
 import { findFamilyFeudOriginal, hideFamilyFeudGem, revealFamilyFeudGemAuthor, revealNextFamilyFeudAnswer, showFamilyFeudGem } from "@/lib/event-kit/family-feud";
 import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
+import { publicSupabaseEnv } from "@/lib/env";
+
+export type WelcomeQrSetupState = { success?: boolean; error?: string };
 
 const SAFE_WHEEL_FALLBACK = [
   "Сказати короткий тост із трьома словами від ведучого",
@@ -54,6 +60,128 @@ export async function showEventKitItemAction(eventId: string, itemId: string) {
     method: "POST",
     accessToken,
     body: JSON.stringify({ p_event_id: eventId, p_item_id: itemId }),
+  });
+  refreshLiveRoutes(eventId);
+}
+
+export async function configureWelcomeQrAction(eventId: string, _previousState: WelcomeQrSetupState, formData: FormData): Promise<WelcomeQrSetupState> {
+  void _previousState;
+  const { user, accessToken } = await hostContext(eventId);
+  const file = formData.get("hero");
+  if (!(file instanceof File) || !file.size || !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+    return { error: "Оберіть JPG, PNG або WebP до 10 МБ." };
+  }
+  const headline = String(formData.get("headline") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const cta = String(formData.get("cta") ?? "").trim();
+  const footer = String(formData.get("footer") ?? "").trim();
+  if (!headline || !body || !cta || !footer) return { error: "Заповніть усі тексти заставки." };
+  const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const assetId = randomUUID();
+  const itemId = randomUUID();
+  const storagePath = `${user.id}/${eventId}/welcome/${assetId}.${extension}`;
+  const { url, publishableKey } = publicSupabaseEnv();
+  const storageUrl = `${url}/storage/v1/object/event-media/${storagePath.split("/").map(encodeURIComponent).join("/")}`;
+  let uploaded = false;
+  let assetRecorded = false;
+  try {
+    const upload = await fetch(storageUrl, {
+      method: "POST",
+      headers: { apikey: publishableKey, Authorization: `Bearer ${accessToken}`, "Content-Type": file.type, "x-upsert": "false" },
+      body: await file.arrayBuffer(),
+    });
+    if (!upload.ok) throw new Error("Storage upload failed");
+    uploaded = true;
+    await supabaseRest("media_assets", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({
+        id: assetId,
+        host_id: user.id,
+        event_id: eventId,
+        kind: "image",
+        storage_path: storagePath,
+        original_filename: file.name.slice(0, 180),
+        mime_type: file.type,
+        size_bytes: file.size,
+        status: "ready",
+        privacy_status: "public_allowed",
+        moderation_status: "approved",
+      }),
+    });
+    assetRecorded = true;
+    await supabaseRest("event_kit_items", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({
+        id: itemId,
+        host_id: user.id,
+        event_id: eventId,
+        source_type: "manual",
+        item_type: "media",
+        title: headline.slice(0, 120),
+        content: body.slice(0, 420),
+        data: { interactive_kind: "welcome_qr", headline, body, cta, footer, asset_ids: [assetId] },
+        source_refs: [{ type: "media_asset", id: assetId }],
+        status: "approved",
+        privacy_status: "public_allowed",
+        is_useful: true,
+      }),
+    });
+    refreshLiveRoutes(eventId);
+    return { success: true };
+  } catch {
+    if (assetRecorded) {
+      await supabaseRest(`media_assets?id=eq.${assetId}&event_id=eq.${eventId}`, { method: "DELETE", accessToken }).catch(() => undefined);
+    }
+    if (uploaded) {
+      await fetch(storageUrl, { method: "DELETE", headers: { apikey: publishableKey, Authorization: `Bearer ${accessToken}` } }).catch(() => undefined);
+    }
+    return { error: "Заставку не збережено. Перевірте файл і спробуйте ще раз." };
+  }
+}
+
+export async function showWelcomeQrAction(eventId: string, questionnaireId: string, welcomeItemId?: string) {
+  const { accessToken } = await hostContext(eventId);
+  const [questionnaires, states, welcomeItems] = await Promise.all([
+    supabaseRest<Array<{ id: string }>>(
+      `questionnaires?select=id&id=eq.${encodeURIComponent(questionnaireId)}&event_id=eq.${encodeURIComponent(eventId)}&status=eq.published&audience=in.(guest,other)&limit=1`,
+      { accessToken },
+    ),
+    supabaseRest<Array<{ revision: number; live_session_id: string | null; public_payload: { session_mode?: "rehearsal" | "live" } }>>(
+      `live_state?select=revision,live_session_id,public_payload&event_id=eq.${encodeURIComponent(eventId)}&limit=1`,
+      { accessToken },
+    ),
+    welcomeItemId
+      ? supabaseRest<Array<{ id: string; title: string | null; content: string | null; data: Record<string, unknown> }>>(
+          `event_kit_items?select=id,title,content,data&id=eq.${encodeURIComponent(welcomeItemId)}&event_id=eq.${encodeURIComponent(eventId)}&item_type=eq.media&status=in.(approved,used)&privacy_status=eq.public_allowed&do_not_use=eq.false&limit=1`,
+          { accessToken },
+        )
+      : Promise.resolve([]),
+  ]);
+  const state = states[0];
+  if (!questionnaires[0] || !state?.live_session_id) return;
+  const welcomeItem = welcomeItems[0];
+  const data = welcomeItem?.data ?? {};
+  if (welcomeItem && data.interactive_kind !== "welcome_qr") return;
+  const assetIds = Array.isArray(data.asset_ids) ? data.asset_ids.map(String).filter(Boolean) : [];
+  const payload = buildWelcomeQrPayload({
+    headline: String(data.headline ?? welcomeItem?.title ?? "ЛАСКАВО ПРОСИМО!"),
+    body: String(data.body ?? welcomeItem?.content ?? "Допоможіть ведучому зібрати матеріал про цю подію."),
+    cta: String(data.cta ?? "СКАНУЙ. 4 ХВИЛИНИ."),
+    footer: String(data.footer ?? "Ваші відповіді вже скоро стануть частиною події."),
+    questionnaireUrl: publicQuestionnaireUrl(questionnaireId),
+    heroAssetId: assetIds[0],
+  }, state.public_payload.session_mode ?? "rehearsal");
+  await supabaseRest(`live_state?event_id=eq.${eventId}`, {
+    method: "PATCH",
+    accessToken,
+    body: JSON.stringify({
+      revision: state.revision + 1,
+      mode: "media",
+      source_event_kit_item_id: welcomeItem?.id ?? null,
+      public_payload: payload,
+    }),
   });
   refreshLiveRoutes(eventId);
 }

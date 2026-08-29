@@ -23,6 +23,7 @@ Visual source: `DESIGN.md`. Business and security sources: handoff `02`, `03`, `
 | Publish | `Опублікувати` | pessimistic | stay + public-link state | persistent panel error | status region |
 | Archive | `Архівувати` | pessimistic server action | dashboard + restore path | persistent error | next Event/dashboard heading |
 | Public submit | `Надіслати відповіді` | idempotent busy | clear success state | preserve entered data | error summary / success heading |
+| Show Welcome / QR | `Показати QR` | pessimistic server action | same open Public Screen polls the sanitized welcome state | keep last known state | Host status / Public Screen live region |
 
 Guest questionnaires use one question per step with visible progress, Back, and Skip for optional questions. Customer/couple questionnaires remain a continuous long form because they are completed deliberately rather than in a live guest setting. Media is a visible optional guest step and uploads only after the text submission succeeds.
 
@@ -33,6 +34,7 @@ The Event workspace opens with a three-step launchpad: share the published guest
 - UI hiding never replaces server/RLS authorization.
 - Authenticated cross-owner Event capability URLs deliberately render 404 to avoid confirming resource existence.
 - Public Screen never exposes raw answers, internal notes, contacts, or full Event Kit rows.
+- Welcome / QR publishes only event-safe copy, a questionnaire capability URL, an approved display asset reference, and display configuration. The QR is generated at render time and is never stored as a screenshot.
 - Privacy changes are pessimistic and visible; public exposure requires approved + public_allowed + explicit live selection.
 - Hard delete is absent from Pilot UI. Events are archived.
 

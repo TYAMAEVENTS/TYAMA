@@ -10,7 +10,7 @@ export type LiveSession = {
 };
 
 export type PublicPayload = {
-  kind?: "message" | "question" | "reveal" | "media" | "clear";
+  kind?: "message" | "question" | "reveal" | "media" | "welcome_qr" | "clear";
   item_type?: string;
   title?: string | null;
   content?: string | null;

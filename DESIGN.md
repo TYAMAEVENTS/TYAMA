@@ -60,6 +60,8 @@ Unbounded is the intended display face and Manrope the intended UI face. Until l
 
 Full-field acid canvas, hairline black rules, zero-radius panels, 9px rhythm with 26px working gaps and up to 54px section framing. Public questionnaires are single-column mobile-first. Host workspace is desktop-first with route-backed navigation and a natural document scroll owner.
 
+Audience-facing Public Screen states may use a stage-graphics register: full-bleed photography, large-distance typography, and minimal chrome. The Welcome / QR state uses a quiet photo-and-paper split rather than inheriting the Host dashboard's acid canvas; controls and other product surfaces remain unchanged.
+
 ## Elevation & Depth
 
 No shadows, blur, glass, or gradients. Hierarchy comes from black fills, borders, whitespace, and type.

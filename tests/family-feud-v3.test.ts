@@ -6,7 +6,7 @@ import {
   revealFamilyFeudGemAuthor,
   revealNextFamilyFeudAnswer,
   showFamilyFeudGem,
-// @ts-ignore Node 22 strip-types test intentionally imports the TypeScript source directly.
+// @ts-expect-error Node 22 strip-types test intentionally imports the TypeScript source directly.
 } from "../src/lib/event-kit/family-feud.ts";
 
 type EventSubmission = Parameters<typeof buildFamilyFeudAnalyses>[0][number];

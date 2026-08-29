@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import Image from "next/image";
+import QRCode from "qrcode";
 import type { PublicScreenState } from "@/lib/live/types";
 
 type BoardAnswer = { label?: string; points?: number };
@@ -12,19 +13,26 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
   const data = payload.data ?? {};
   const kind = String(data.interactive_kind ?? "");
   const [media, setMedia] = useState<{ url: string; kind: string; mime_type: string } | null>(null);
-  const assetIds = Array.isArray(data.asset_ids) ? data.asset_ids.map(String) : [];
+  const welcome = payload.kind === "welcome_qr";
+  const assetIds = welcome && typeof data.hero_asset_id === "string"
+    ? [data.hero_asset_id]
+    : Array.isArray(data.asset_ids) ? data.asset_ids.map(String) : [];
   const mediaIndex = Math.max(0, Math.min(Number(data.current_index ?? 0), Math.max(assetIds.length - 1, 0)));
   const assetId = assetIds[mediaIndex];
 
   useEffect(() => {
     let active = true;
-    if (kind !== "slideshow" || !assetId) return;
+    if ((kind !== "slideshow" && !welcome) || !assetId) return;
     fetch(`/api/public-screen/${encodeURIComponent(token)}/media/${encodeURIComponent(assetId)}`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((next) => { if (active) setMedia(next); })
       .catch(() => { if (active) setMedia(null); });
     return () => { active = false; };
-  }, [assetId, kind, token, state.revision]);
+  }, [assetId, kind, token, state.revision, welcome]);
+
+  if (welcome) {
+    return <WelcomeQrScreen data={data} heroUrl={media?.url} />;
+  }
 
   if (data.stage === "intro") {
     const intro = kind === "family_feud"
@@ -65,6 +73,27 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
   return <div className="screen-content screen-content--blocked"><span className="eyebrow">ТЯМА / LIVE</span><h1>Оберіть інтерактив</h1><p>Сирі відповіді гостей не показуються на екрані.</p></div>;
 }
 
+function WelcomeQrScreen({ data, heroUrl }: { data: Record<string, unknown>; heroUrl?: string }) {
+  const questionnaireUrl = typeof data.questionnaire_url === "string" ? data.questionnaire_url : "";
+  const [qr, setQr] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    if (!questionnaireUrl) return;
+    QRCode.toString(questionnaireUrl, { type: "svg", width: 1200, margin: 2, color: { dark: "#111111", light: "#FFFFFF" }, errorCorrectionLevel: "M" })
+      .then((svg) => { if (active) setQr(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`); })
+      .catch(() => { if (active) setQr(undefined); });
+    return () => { active = false; };
+  }, [questionnaireUrl]);
+  return <div className="welcome-screen">
+    <div className="welcome-screen__photo">{heroUrl ? <img src={heroUrl} alt="" /> : <div className="welcome-screen__photo-placeholder" aria-hidden="true">ТЯМА</div>}</div>{/* eslint-disable-line @next/next/no-img-element */}
+    <div className="welcome-screen__content">
+      <div className="welcome-screen__copy"><span className="welcome-screen__label">TYAMA / GUEST INPUT</span><h1>{String(data.headline ?? "ЛАСКАВО ПРОСИМО!")}</h1><p>{String(data.body ?? "")}</p></div>
+      <div className="welcome-screen__scan"><div className="welcome-screen__qr">{qr ? <img src={qr} alt="QR-код на анкету гостей" /> : <span>QR</span>}</div><strong>{String(data.cta ?? "СКАНУЙ. 4 ХВИЛИНИ.")}</strong></div>{/* eslint-disable-line @next/next/no-img-element */}
+      <footer>{String(data.footer ?? "")}</footer>
+    </div>
+  </div>;
+}
+
 export function PublicScreen({ initialState, token }: { initialState: PublicScreenState; token: string }) {
   const [state, setState] = useState(initialState);
   const [connected, setConnected] = useState(true);
@@ -90,13 +119,14 @@ export function PublicScreen({ initialState, token }: { initialState: PublicScre
 
   const payload = state.public_payload;
   const cleared = state.mode === "idle" || state.mode === "clear" || payload.kind === "clear";
+  const welcome = payload.kind === "welcome_qr";
   return (
-    <main className={`screen-page screen-page--${state.mode}`}>
-      <header className="screen-header"><span>ТЯМА / LIVE CONTEXT</span><span>{payload.session_mode === "rehearsal" ? "РЕПЕТИЦІЯ" : state.event_title}</span></header>
+    <main className={`screen-page screen-page--${welcome ? "welcome" : state.mode}`}>
+      {!welcome ? <header className="screen-header"><span>ТЯМА / LIVE CONTEXT</span><span>{payload.session_mode === "rehearsal" ? "РЕПЕТИЦІЯ" : state.event_title}</span></header> : null}
       <section className="screen-stage" aria-live="polite">
         {cleared ? <div className="screen-idle"><span className="screen-idle__signal" /><h1>ТЯМА</h1><p>Контекст уже збирається.</p></div> : <StructuredContent key={state.revision} state={state} token={token} />}
       </section>
-      <footer className="screen-footer"><span>REV {String(state.revision).padStart(3, "0")}</span><span>{connected ? "SIGNAL OK" : "LAST KNOWN STATE"}</span></footer>
+      {!welcome ? <footer className="screen-footer"><span>REV {String(state.revision).padStart(3, "0")}</span><span>{connected ? "SIGNAL OK" : "LAST KNOWN STATE"}</span></footer> : <span className={`welcome-screen__signal ${connected ? "is-connected" : ""}`} aria-label={connected ? "Екран підключено" : "Показано останній отриманий стан"} />}
     </main>
   );
 }
