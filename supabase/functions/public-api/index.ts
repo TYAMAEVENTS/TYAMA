@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
-import { itemAuthorizesPublicMedia } from "./media-policy.ts";
+import { payloadAuthorizesPublicMedia } from "./media-policy.ts";
+import { sanitizePublicPresentation } from "./public-presentation.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -200,7 +201,7 @@ Deno.serve(async (request: Request) => {
       .eq("host_id", event.host_id)
       .maybeSingle();
     if (stateError) return json({ error: "Request failed" }, 500);
-    return json(state ? { ...state, event_title: event.title } : {
+    return json(state ? { ...state, public_payload: sanitizePublicPresentation(state.public_payload), event_title: event.title } : {
       event_title: event.title,
       revision: 0,
       mode: "idle",
@@ -225,7 +226,7 @@ Deno.serve(async (request: Request) => {
 
     const { data: state, error: stateError } = await admin
       .from("live_state")
-      .select("source_event_kit_item_id")
+      .select("source_event_kit_item_id,public_payload")
       .eq("event_id", event.id)
       .eq("host_id", event.host_id)
       .maybeSingle();
@@ -243,7 +244,8 @@ Deno.serve(async (request: Request) => {
       .eq("do_not_use", false)
       .maybeSingle();
     if (itemError) return json({ error: "Request failed" }, 500);
-    if (!itemAuthorizesPublicMedia(item, assetId)) return json(null, 404);
+    const publicPayload = sanitizePublicPresentation(state.public_payload);
+    if (!payloadAuthorizesPublicMedia(publicPayload, assetId)) return json(null, 404);
 
     const { data: asset, error: assetError } = await admin
       .from("media_assets")
