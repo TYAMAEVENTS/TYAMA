@@ -282,7 +282,7 @@ begin
         and u.used_at is null
       for update;
     if not found then return jsonb_build_object('status','blocked','reason','undo_unavailable','current_version',sess.runtime_version); end if;
-    update public.show_undo_tokens set used_at=now() where token=p_undo_token;
+    update public.show_undo_tokens u set used_at=now() where u.token=p_undo_token;
     if sess.mode='live' then update public.live_state set revision=revision+1,mode=target_mode,source_event_kit_item_id=target_source,public_payload=payload where event_id=p_event_id;
     else update public.rehearsal_state set revision=revision+1,stage=target_mode,private_payload=payload,updated_at=now() where session_id=sess.id; end if;
     update public.live_sessions set runtime_version=runtime_version+1 where id=sess.id;
