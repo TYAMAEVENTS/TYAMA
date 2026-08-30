@@ -98,6 +98,7 @@ end $$;
 reset role;
 create temporary table pack3_foreign_session(id uuid);
 insert into pack3_foreign_session select id from public.live_sessions where event_id='21000000-0000-4000-8000-000000000001' order by created_at desc limit 1;
+grant select on table pack3_foreign_session to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','11000000-0000-4000-8000-000000000002',true);
 insert into public.events(id,host_id,event_type,title) values('21000000-0000-4000-8000-000000000002','11000000-0000-4000-8000-000000000002','birthday','Synthetic other Event');
