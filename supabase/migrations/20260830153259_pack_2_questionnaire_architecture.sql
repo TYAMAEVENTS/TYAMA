@@ -107,6 +107,12 @@ begin
 exception when others then return false;
 end $$;
 
+-- The validator is the only private routine callable by Host sessions. USAGE
+-- permits name resolution; every other private routine remains non-executable.
+grant usage on schema private to authenticated;
+revoke all on function private.pack2_validate_settings(text,jsonb) from public,anon,authenticated;
+grant execute on function private.pack2_validate_settings(text,jsonb) to authenticated;
+
 alter table public.questions add constraint questions_pack2_settings_valid check (private.pack2_validate_settings(type,settings)) not valid;
 
 do $$
