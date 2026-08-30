@@ -81,4 +81,5 @@ jobs:
 
       - name: Stop isolated Supabase
         if: always()
+        continue-on-error: true
         run: supabase stop --no-backup
