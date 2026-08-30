@@ -273,7 +273,14 @@ begin
     if sess.mode='live' then update public.live_state set live_session_id=null,revision=revision+1,mode='clear',source_event_kit_item_id=null,public_payload=jsonb_build_object('kind','clear') where event_id=p_event_id; update public.events set status='ready' where id=p_event_id; end if;
     receipt:=jsonb_build_object('status','success','ended',true,'runtime_version',sess.runtime_version+1);
   elsif p_action='undo' then
-    select prior_mode,prior_source_event_kit_item_id,prior_payload into target_mode,target_source,payload from public.show_undo_tokens where token=p_undo_token and session_id=sess.id and expected_runtime_version=sess.runtime_version and used_at is null for update;
+    select u.prior_mode,u.prior_source_event_kit_item_id,u.prior_payload
+      into target_mode,target_source,payload
+      from public.show_undo_tokens u
+      where u.token=p_undo_token
+        and u.session_id=sess.id
+        and u.expected_runtime_version=sess.runtime_version
+        and u.used_at is null
+      for update;
     if not found then return jsonb_build_object('status','blocked','reason','undo_unavailable','current_version',sess.runtime_version); end if;
     update public.show_undo_tokens set used_at=now() where token=p_undo_token;
     if sess.mode='live' then update public.live_state set revision=revision+1,mode=target_mode,source_event_kit_item_id=target_source,public_payload=payload where event_id=p_event_id;
