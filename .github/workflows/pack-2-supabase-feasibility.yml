@@ -1,0 +1,84 @@
+name: PACK 2 Supabase CI feasibility
+
+on:
+  push:
+    branches:
+      - pack-2-ci-feasibility
+
+permissions:
+  contents: read
+
+jobs:
+  supabase-local-feasibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Confirm CLI
+        run: supabase --version
+
+      - name: Start isolated Supabase
+        run: supabase start
+
+      - name: Replay migrations from clean database
+        run: supabase db reset --local --no-seed
+
+      - name: Confirm Postgres and migration chain
+        env:
+          PGURL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 -c "select current_database(), current_user;"
+          supabase migration list --local
+
+      - name: Execute minimal RLS test
+        env:
+          PGURL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          create table public.ci_rls_probe (
+            id bigint generated always as identity primary key,
+            owner_id uuid not null
+          );
+          alter table public.ci_rls_probe enable row level security;
+          grant select on public.ci_rls_probe to anon;
+          insert into public.ci_rls_probe (owner_id)
+          values ('00000000-0000-0000-0000-000000000001');
+          set local role anon;
+          do $$
+          begin
+            if (select count(*) from public.ci_rls_probe) <> 0 then
+              raise exception 'RLS probe leaked a protected row';
+            end if;
+          end
+          $$;
+          reset role;
+          rollback;
+          SQL
+
+      - name: Confirm local Storage
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 2             http://127.0.0.1:54321/storage/v1/status
+
+      - name: Confirm local Edge Function
+        run: |
+          supabase functions serve ci-probe --no-verify-jwt > /tmp/ci-edge.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error               http://127.0.0.1:54321/functions/v1/ci-probe               | tee /tmp/ci-edge-response.json               | grep -q '"ok":true'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/ci-edge.log
+          exit 1
+
+      - name: Stop isolated Supabase
+        if: always()
+        run: supabase stop --no-backup
