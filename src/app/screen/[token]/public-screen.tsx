@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import Image from "next/image";
 import type { PublicScreenState } from "@/lib/live/types";
+import { mediaForCurrentAsset, type BoundPublicMedia, type PublicMedia } from "@/lib/live/media-state";
 
 type BoardAnswer = { label?: string; points?: number };
 
@@ -11,19 +12,21 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
   const payload = state.public_payload;
   const data = payload.data ?? {};
   const kind = String(data.interactive_kind ?? "");
-  const [media, setMedia] = useState<{ url: string; kind: string; mime_type: string } | null>(null);
-  const [previousMedia, setPreviousMedia] = useState<{ url: string; kind: string; mime_type: string } | null>(null);
+  const [media, setMedia] = useState<BoundPublicMedia | null>(null);
+  const [previousMedia, setPreviousMedia] = useState<BoundPublicMedia | null>(null);
   const assetIds = Array.isArray(data.asset_ids) ? data.asset_ids.map(String) : [];
   const mediaIndex = Math.max(0, Math.min(Number(data.current_index ?? 0), Math.max(assetIds.length - 1, 0)));
   const assetId = assetIds[mediaIndex];
+  const currentMedia = mediaForCurrentAsset(media, assetId);
 
   useEffect(() => {
     let active = true;
-    if (!(["slideshow", "who_said"].includes(kind)) || !assetId) return;
+    if (!(["slideshow", "who_said"].includes(kind)) || !assetId) { setMedia(null); setPreviousMedia(null); return; }
+    setMedia((current) => { if (kind === "slideshow" && current && current.assetId !== assetId) setPreviousMedia(current); if (kind === "who_said") setPreviousMedia(null); return current?.assetId === assetId ? current : null; });
     fetch(`/api/public-screen/${encodeURIComponent(token)}/media/${encodeURIComponent(assetId)}`, { cache: "no-store" })
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((next) => { if (active) { setPreviousMedia(media); setMedia(next); } })
-      .catch(() => { if (active && !media) setMedia(null); });
+      .then((next: PublicMedia) => { if (active) setMedia({ ...next, assetId }); })
+      .catch(() => { if (active) setMedia((current) => current?.assetId === assetId ? null : current); });
     if (kind === "slideshow" && assetIds.length > 1) {
       const nextId = assetIds[(mediaIndex + 1) % assetIds.length];
       fetch(`/api/public-screen/${encodeURIComponent(token)}/media/${encodeURIComponent(nextId)}`, { cache: "force-cache" })
@@ -32,8 +35,6 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
         .catch(() => undefined);
     }
     return () => { active = false; };
-  // Keep the previous frame mounted until the newly signed asset is ready.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId, kind, token, state.revision]);
 
   if (data.stage === "intro") {
@@ -59,7 +60,7 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
   }
   if (kind === "who_said") {
     const revealed = Boolean(data.revealed);
-    return <div className="screen-content screen-content--quote"><span className="eyebrow">ХТО ЦЕ СКАЗАВ?</span><blockquote>«{String(data.quote ?? payload.content ?? "")}»</blockquote>{revealed ? <div className="quote-author">{media ? <img src={media.url} alt="Автор відповіді" /> : <div className="quote-author__empty">Без фото</div>}<span>ПРАВИЛЬНА ВІДПОВІДЬ</span><strong>{String(data.author ?? "Гість")}</strong></div> : <p>Хто міг це написати?</p>}</div>; // eslint-disable-line @next/next/no-img-element
+    return <div className="screen-content screen-content--quote"><span className="eyebrow">ХТО ЦЕ СКАЗАВ?</span><blockquote>«{String(data.quote ?? payload.content ?? "")}»</blockquote>{revealed ? <div className="quote-author">{currentMedia ? <img src={currentMedia.url} alt="Автор відповіді" /> : null}<span>ПРАВИЛЬНА ВІДПОВІДЬ</span><strong>{String(data.author ?? "Гість")}</strong></div> : <p>Хто міг це написати?</p>}</div>; // eslint-disable-line @next/next/no-img-element
   }
   if (kind === "dilettantes") {
     if (data.stage === "wheel") {
@@ -72,7 +73,7 @@ function StructuredContent({ state, token }: { state: PublicScreenState; token: 
     return <div className="screen-content screen-content--number"><span className="eyebrow">КЛУБ ДИЛЕТАНТІВ</span><h1>{payload.title}</h1><p>{payload.content}</p>{revealed ? <div className="number-answer"><span>ПРАВИЛЬНА ВІДПОВІДЬ</span><strong>{String(data.correct_answer ?? "—")} {String(data.unit ?? "")}</strong>{data.consequence ? <small>Найдальша відповідь: {String(data.consequence)}</small> : null}</div> : <div className="number-wait">Напишіть свою версію числа</div>}</div>;
   }
   if (kind === "slideshow") {
-    const shown = media ?? previousMedia;
+    const shown = currentMedia ?? previousMedia;
     return <div className="screen-content screen-content--slideshow"><span className="eyebrow">СЛАЙДШОУ / {mediaIndex + 1} З {assetIds.length}</span>{!shown ? <div className="media-loading">Завантажуємо файл…</div> : shown.kind === "video" ? <video key={shown.url} src={shown.url} autoPlay controls playsInline /> : shown.kind === "audio" ? <audio key={shown.url} src={shown.url} autoPlay controls /> : <div className="slideshow-frame" key={shown.url}><img className="slideshow-frame__backdrop" src={shown.url} alt="" aria-hidden="true" /><img className="slideshow-frame__image" src={shown.url} alt="Фото гостя для слайдшоу" /></div>}</div>; // eslint-disable-line @next/next/no-img-element
   }
   return <div className="screen-content screen-content--blocked"><span className="eyebrow">ТЯМА / LIVE</span><h1>Оберіть інтерактив</h1><p>Сирі відповіді гостей не показуються на екрані.</p></div>;

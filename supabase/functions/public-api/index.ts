@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
+import { itemAuthorizesPublicMedia } from "./media-policy.ts";
 
 type JsonObject = Record<string, unknown>;
 
@@ -233,18 +234,16 @@ Deno.serve(async (request: Request) => {
 
     const { data: item, error: itemError } = await admin
       .from("event_kit_items")
-      .select("data")
+      .select("item_type,data")
       .eq("id", state.source_event_kit_item_id)
       .eq("event_id", event.id)
       .eq("host_id", event.host_id)
-      .eq("item_type", "media")
       .in("status", ["approved", "used"])
       .eq("privacy_status", "public_allowed")
       .eq("do_not_use", false)
       .maybeSingle();
     if (itemError) return json({ error: "Request failed" }, 500);
-    const assetIds = Array.isArray(item?.data?.asset_ids) ? item.data.asset_ids.map(String) : [];
-    if (!item || !assetIds.includes(assetId)) return json(null, 404);
+    if (!itemAuthorizesPublicMedia(item, assetId)) return json(null, 404);
 
     const { data: asset, error: assetError } = await admin
       .from("media_assets")

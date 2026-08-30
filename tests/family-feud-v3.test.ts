@@ -6,7 +6,6 @@ import {
   revealFamilyFeudGemAuthor,
   revealNextFamilyFeudAnswer,
   showFamilyFeudGem,
-// @ts-expect-error Node 22 strip-types test intentionally imports the TypeScript source directly.
 } from "../src/lib/event-kit/family-feud.ts";
 
 type EventSubmission = Parameters<typeof buildFamilyFeudAnalyses>[0][number];
@@ -29,7 +28,7 @@ function submission(id: string, value: string, respondent = `Гість ${id}`):
       moderation_status: "approved",
       is_useful: true,
       do_not_use: false,
-      question: { id: "question-1", prompt, type: "short_text", settings: {} },
+      question: { id: "question-1", prompt, type: "short_text", settings: { content_intents: ["family_feud"] } },
       media_assets: [],
     }],
   };
@@ -45,6 +44,7 @@ test("family_feud grouping preserves originals and keeps non-board interesting a
     submission("6", "Танцює до ранку"),
     submission("7", "Приїжджає тоді, коли всі вже перестали його чекати"),
     submission("8", "Замовляє всім ще один раунд"),
+    submission("9", "Завжди знаходить найкращий десерт"),
   ];
   const before = JSON.stringify(records);
   const analysis = buildFamilyFeudAnalyses(records)[0];
@@ -52,7 +52,7 @@ test("family_feud grouping preserves originals and keeps non-board interesting a
   assert.equal(analysis.top.length, 6);
   assert.equal(analysis.top.find((group) => group.key === "запізнюється")?.points, 2);
   assert.equal(analysis.top.find((group) => group.key === "смішить усіх")?.points, 2);
-  assert.equal(analysis.groups.reduce((sum, group) => sum + group.points, 0), 8);
+  assert.equal(analysis.groups.reduce((sum, group) => sum + group.points, 0), 9);
   assert.ok(analysis.gems.length >= 1);
   assert.equal(JSON.stringify(records), before);
 });

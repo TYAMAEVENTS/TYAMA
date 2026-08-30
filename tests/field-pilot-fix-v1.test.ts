@@ -1,68 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  buildFamilyFeudAnalyses,
-  replaceFamilyFeudBoardSlot,
-  revealFamilyFeudAnswerAt,
-  revealNextFamilyFeudAnswer,
-// @ts-expect-error Node 22 strip-types test intentionally imports TypeScript source directly.
-} from "../src/lib/event-kit/family-feud.ts";
-import {
-  buildWhoSaidCandidates,
-  hideWhoSaidAuthor,
-  revealWhoSaidCandidate,
-// @ts-expect-error Node 22 strip-types test intentionally imports TypeScript source directly.
-} from "../src/lib/event-kit/who-said.ts";
-
-type EventSubmission = Parameters<typeof buildFamilyFeudAnalyses>[0][number];
-
-function answer(id: string, prompt: string, value: string, settings: Record<string, unknown>, media: EventSubmission["answers"][number]["media_assets"] = []) {
-  return { id, answer_text: value, answer_json: null, privacy_status: "public_allowed" as const, moderation_status: "approved" as const, is_useful: true, do_not_use: false, question: { id: `q-${id}`, prompt, type: media.length ? "media" as const : "short_text" as const, settings }, media_assets: media };
-}
-
-function submission(id: string, answers: EventSubmission["answers"], name = `QA ${id}`): EventSubmission {
-  return { id: `s-${id}`, status: "submitted", submitted_at: "2026-08-29T00:00:00Z", created_at: "2026-08-29T00:00:00Z", respondent: { display_name: name, relationship_label: null }, questionnaire: { title: "QA", audience: "guest" }, answers };
-}
-
-test("Who Said chooses priority quote and selfie from the same submission", () => {
-  const records = [
-    submission("1", [
-      answer("fallback-1", "Fallback", "Завжди допомагає", { content_intents: ["who_said"], who_said_priority: 20 }),
-      answer("priority-1", "Priority", "Людина, яка запалює всіх", { content_intents: ["who_said"], who_said_priority: 10 }),
-      answer("selfie-1", "Селфі", "", { content_intents: ["media"], who_said_role: "selfie" }, [{ id: "media-1", kind: "image", mime_type: "image/webp", original_filename: "qa.webp", size_bytes: 100, status: "ready", privacy_status: "public_allowed", moderation_status: "approved" }]),
-    ], "QA Guest 01"),
-    submission("2", [answer("priority-2", "Priority", "Інша фраза", { content_intents: ["who_said"], who_said_priority: 10 }), answer("selfie-2", "Селфі", "", { content_intents: ["media"], who_said_role: "selfie" }, [{ id: "media-2", kind: "image", mime_type: "image/webp", original_filename: "qa.webp", size_bytes: 100, status: "ready", privacy_status: "public_allowed", moderation_status: "approved" }])], "QA Guest 02"),
-  ];
-  const candidates = buildWhoSaidCandidates(records);
-  assert.deepEqual(candidates[0], { submissionId: "s-1", answerId: "priority-1", quote: "Людина, яка запалює всіх", author: "QA Guest 01", selfieAssetId: "media-1" });
-  assert.equal(candidates[1].selfieAssetId, "media-2");
-});
-
-test("Who Said keeps quote without selfie and reveals identity only explicitly", () => {
-  const candidate = buildWhoSaidCandidates([submission("3", [answer("quote-3", "Quote", "Тепла і дуже смілива", { content_intents: ["who_said"], who_said_priority: 1 })], "QA Guest 03")])[0];
-  assert.equal(candidate.selfieAssetId, null);
-  const hidden = hideWhoSaidAuthor({ interactive_kind: "who_said", quote: candidate.quote, author: "leak", asset_ids: ["leak"] });
-  assert.equal("author" in hidden, false);
-  assert.equal("asset_ids" in hidden, false);
-  const revealed = revealWhoSaidCandidate(hidden, candidate);
-  assert.equal(revealed.author, "QA Guest 03");
-  assert.deepEqual(revealed.asset_ids, []);
-});
-
-test("Family Feud v4 creates six positions and selectively reveals only requested row", () => {
-  const records = ["А", "Б", "В", "Г", "Д", "Е", "Ж"].map((value, index) => submission(String(index), [answer(`ff-${index}`, "Питання", `${value} відповідь`, { content_intents: ["family_feud"] })]));
-  const analysis = buildFamilyFeudAnalyses(records)[0];
-  assert.equal(analysis.top.length, 6);
-  assert.equal(analysis.groups.length, 7);
-  const data = { generator: "family_feud_v4", answers: analysis.top.map((group) => ({ label: group.label, points: group.points })), revealed_indexes: [] };
-  const revealed = revealFamilyFeudAnswerAt(data, 3);
-  assert.deepEqual(revealed.revealed_indexes, [3]);
-  const replaced = replaceFamilyFeudBoardSlot(revealed, 0, analysis.groups[6]);
-  assert.equal((replaced.answers as Array<{ label: string }>)[0].label, analysis.groups[6].label);
-  assert.deepEqual(replaced.revealed_indexes, [3]);
-});
-
-test("legacy Family Feud retains sequential reveal", () => {
-  const legacy = { generator: "family_feud_v3", answers: [{ label: "A", points: 2 }], revealed_count: 0 };
-  assert.equal(revealNextFamilyFeudAnswer(legacy).revealed_count, 1);
-});
+import { buildSmartEventKitDrafts } from "../src/lib/event-kit/draft-builder.ts";
+import { reconcileGeneratedItems } from "../src/lib/event-kit/reconcile.ts";
+import { mediaForCurrentAsset } from "../src/lib/live/media-state.ts";
+import { analyzeWhoSaidCandidates, hideWhoSaidAuthor, revealWhoSaidCandidate } from "../src/lib/event-kit/who-said.ts";
+import { itemAuthorizesPublicMedia } from "../supabase/functions/public-api/media-policy.ts";
+import type { EventKitItem } from "../src/lib/event-kit/types.ts";
+import type { EventSubmission } from "../src/lib/responses/data.ts";
+function media(id:string,privacy:"host_only"|"review_required"|"public_allowed"="public_allowed",moderation:"pending"|"approved"|"rejected"="approved"){return{id,kind:"image" as const,mime_type:"image/webp",original_filename:"fixture.webp",size_bytes:100,status:"ready" as const,privacy_status:privacy,moderation_status:moderation};}
+function answer(id:string,qid:string,value:string,settings:Record<string,unknown>,assets:ReturnType<typeof media>[]=[]){return{id,answer_text:value,answer_json:null,privacy_status:"public_allowed" as const,moderation_status:"approved" as const,is_useful:true,do_not_use:false,question:{id:qid,prompt:qid,type:assets.length?"media" as const:"short_text" as const,settings},media_assets:assets};}
+function submission(id:string,answers:EventSubmission["answers"],name=`Fixture ${id}`):EventSubmission{return{id:`submission-${id}`,status:"submitted",submitted_at:"2026-08-29T00:00:00Z",created_at:"2026-08-29T00:00:00Z",respondent:{display_name:name,relationship_label:null},questionnaire:{title:"Fixture",audience:"guest"},answers};}
+function item(o:Partial<EventKitItem>):EventKitItem{return{id:"item",host_id:"host",event_id:"event",source_type:"rules",item_type:"interactive",title:"Generated",content:"Content",data:{},source_refs:[],status:"approved",privacy_status:"public_allowed",is_useful:true,do_not_use:false,sort_order:10,created_at:"2026-08-29T00:00:00Z",updated_at:"2026-08-29T00:00:00Z",...o};}
+test("ready Who Said requires same-submission selfie",()=>{const a=analyzeWhoSaidCandidates([submission("1",[answer("q","quote","Фраза",{content_intents:["who_said"]}),answer("s","selfie","",{content_intents:["media"],who_said_role:"selfie"},[media("m")])])]);assert.equal(a.ready.length,1);assert.equal(a.ready[0].selfieAssetId,"m");});
+test("quote without selfie is needsPhoto",()=>{const r=[submission("1",[answer("q","quote","Фраза",{content_intents:["who_said"]})])];const a=analyzeWhoSaidCandidates(r);assert.equal(a.ready.length,0);assert.equal(a.needsPhoto.length,1);assert.equal(buildSmartEventKitDrafts(r).some(d=>d.data.generator==="who_said_v3"),false);});
+test("selfie from another submission is never paired",()=>{const a=analyzeWhoSaidCandidates([submission("1",[answer("q","quote","Фраза",{content_intents:["who_said"]})]),submission("2",[answer("s","selfie","",{content_intents:["media"],who_said_role:"selfie"},[media("m")])])]);assert.equal(a.ready.length,0);});
+test("non-public-ready selfie is not ready",()=>{for(const m of[media("p","public_allowed","pending"),media("r","review_required"),media("h","host_only")])assert.equal(analyzeWhoSaidCandidates([submission(m.id,[answer("q","quote","Фраза",{content_intents:["who_said"]}),answer("s","selfie","",{content_intents:["media"],who_said_role:"selfie"},[m])])]).ready.length,0);});
+test("identity hidden then exact asset revealed",()=>{const c=analyzeWhoSaidCandidates([submission("1",[answer("q","quote","Фраза",{content_intents:["who_said"]}),answer("s","selfie","",{content_intents:["media"],who_said_role:"selfie"},[media("m")])],"Олена")]).ready[0];const h=hideWhoSaidAuthor({author:"x",asset_ids:["x"]});assert.equal("author" in h,false);assert.deepEqual(revealWhoSaidCandidate(h,c).asset_ids,["m"]);});
+test("public media authorization is exact",()=>{assert.equal(itemAuthorizesPublicMedia({item_type:"media",data:{asset_ids:["s"]}},"s"),true);assert.equal(itemAuthorizesPublicMedia({item_type:"interactive",data:{interactive_kind:"who_said",revealed:true,asset_ids:["w"]}},"w"),true);assert.equal(itemAuthorizesPublicMedia({item_type:"interactive",data:{interactive_kind:"who_said",revealed:false,asset_ids:["w"]}},"w"),false);assert.equal(itemAuthorizesPublicMedia({item_type:"interactive",data:{interactive_kind:"who_said",revealed:true,asset_ids:["w"]}},"x"),false);});
+test("stale asset A cannot render as B",()=>{const a={assetId:"A",url:"a",kind:"image",mime_type:"image/webp"};assert.equal(mediaForCurrentAsset(a,"B"),null);assert.equal(mediaForCurrentAsset(a,"A"),a);});
+test("reconcile downgrades stale item and is idempotent",()=>{const stale=item({data:{generator:"who_said_v3",generator_key:"smart-who-said-v3:missing"}});const first=reconcileGeneratedItems([stale],[]);const done={...stale,...first.updates[0].patch} as EventKitItem;assert.equal(done.status,"draft");assert.equal(done.do_not_use,true);assert.equal(reconcileGeneratedItems([done],[]).updates.length,0);});
+test("manual item unchanged",()=>assert.equal(reconcileGeneratedItems([item({source_type:"manual"})],[]).updates.length,0));
+test("host-curated board survives reconcile",()=>{const answers=[{label:"Host",points:1}];const existing=item({data:{generator:"family_feud_v4",generator_key:"family-feud-v4:q",host_curated:true,answers}});const draft={generatorKey:"family-feud-v4:q",itemType:"interactive" as const,title:"100",content:"q",sourceRefs:[],data:{generator:"family_feud_v4",answers:[{label:"Auto",points:9}]}};const r=reconcileGeneratedItems([existing],[draft]);assert.deepEqual((r.updates[0].patch.data as Record<string,unknown>).answers,answers);});
+test("stable slideshow key reconciles",()=>{const records=[submission("1",[answer("m","media","",{content_intents:["media"]},[media("asset")])])];const draft=buildSmartEventKitDrafts(records).find(d=>d.data.interactive_kind==="slideshow")!;assert.equal(draft.generatorKey,"auto-slideshow-v1");const r=reconcileGeneratedItems([item({item_type:"media",data:{interactive_kind:"slideshow",asset_ids:[]}})],[draft]);assert.equal(r.creates.length,0);assert.equal(r.updates.length,1);});

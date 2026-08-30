@@ -1,7 +1,8 @@
 import type { EventKitType } from "@/lib/event-kit/types";
 import type { EventSubmission } from "@/lib/responses/data";
-import { buildFamilyFeudAnalyses } from "@/lib/event-kit/family-feud";
-import { buildWhoSaidCandidates } from "@/lib/event-kit/who-said";
+import { buildFamilyFeudAnalyses } from "./family-feud.ts";
+import { analyzeWhoSaidCandidates } from "./who-said.ts";
+import { isPublicReadyMedia } from "./readiness.ts";
 
 export type SmartEventKitDraft = {
   generatorKey: string;
@@ -41,7 +42,7 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
     });
   }
 
-  const quotes = buildWhoSaidCandidates(submissions).slice(0, 40);
+  const quotes = analyzeWhoSaidCandidates(submissions).ready.slice(0, 40);
   for (const quote of quotes) {
     drafts.push({
       generatorKey: `smart-who-said-v3:${quote.answerId}`,
@@ -52,17 +53,17 @@ export function buildSmartEventKitDrafts(submissions: EventSubmission[]): SmartE
         { type: "answer", id: quote.answerId },
         ...(quote.selfieAssetId ? [{ type: "media_asset" as const, id: quote.selfieAssetId }] : []),
       ],
-      data: { generator: "who_said_v3", schema_version: 3, interactive_kind: "who_said", stage: "intro", quote: clip(quote.quote, 500), has_selfie: Boolean(quote.selfieAssetId), revealed: false },
+      data: { generator: "who_said_v3", schema_version: 3, interactive_kind: "who_said", stage: "intro", quote: clip(quote.quote, 500), has_selfie: true, revealed: false, readiness: "ready" },
     });
   }
 
   const mediaAssets = submissions.flatMap((submission) => submission.answers.flatMap((answer) =>
-    answer.media_assets.filter((asset) => asset.status === "ready" && asset.moderation_status !== "rejected" && asset.privacy_status !== "host_only"),
+    answer.media_assets.filter(isPublicReadyMedia),
   ));
   const uniqueMedia = [...new Map(mediaAssets.map((asset) => [asset.id, asset])).values()].slice(0, 50);
   if (uniqueMedia.length) {
     drafts.push({
-      generatorKey: `smart-slideshow-v2:${uniqueMedia.map((asset) => asset.id).sort().join(":")}`,
+      generatorKey: "auto-slideshow-v1",
       itemType: "media",
       title: "Слайдшоу гостей",
       content: `${uniqueMedia.length} фото, відео або аудіо з анкет гостей`,

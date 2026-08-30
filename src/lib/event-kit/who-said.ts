@@ -17,6 +17,8 @@ export type WhoSaidCandidate = {
   selfieAssetId: string | null;
 };
 
+export type WhoSaidAnalysis = { totalCandidates: number; ready: WhoSaidCandidate[]; needsPhoto: WhoSaidCandidate[] };
+
 function answerText(answer: EventSubmission["answers"][number]) {
   if (answer.answer_text?.trim()) return answer.answer_text.trim();
   if (typeof answer.answer_json === "string") return answer.answer_json.trim();
@@ -39,8 +41,8 @@ function isSelfieAnswer(answer: EventSubmission["answers"][number]) {
     || (!contentIntents(settings).length && LEGACY_SELFIE_PROMPT.test(answer.question?.prompt ?? ""));
 }
 
-export function buildWhoSaidCandidates(submissions: EventSubmission[]): WhoSaidCandidate[] {
-  return submissions.flatMap((submission) => {
+export function analyzeWhoSaidCandidates(submissions: EventSubmission[]): WhoSaidAnalysis {
+  const candidates = submissions.flatMap((submission) => {
     const quotes = submission.answers.flatMap((answer) => {
       const priority = quotePriority(answer);
       const quote = answerText(answer);
@@ -52,15 +54,22 @@ export function buildWhoSaidCandidates(submissions: EventSubmission[]): WhoSaidC
     const selfie = submission.answers
       .filter(isSelfieAnswer)
       .flatMap((answer) => answer.media_assets)
-      .find((asset) => asset.kind === "image" && asset.status === "ready" && asset.moderation_status !== "rejected" && asset.privacy_status !== "host_only");
+      .find((asset) => asset.kind === "image" && asset.status === "ready" && asset.moderation_status === "approved" && asset.privacy_status === "public_allowed");
+    const author = submission.respondent?.display_name?.trim() || "";
     return [{
       submissionId: submission.id,
       answerId: selected.answer.id,
       quote: selected.quote,
-      author: submission.respondent?.display_name?.trim() || "Без імені",
+      author,
       selfieAssetId: selfie?.id ?? null,
     }];
   });
+  const ready = candidates.filter((candidate) => Boolean(candidate.author && candidate.selfieAssetId));
+  return { totalCandidates: candidates.length, ready, needsPhoto: candidates.filter((candidate) => !ready.includes(candidate)) };
+}
+
+export function buildWhoSaidCandidates(submissions: EventSubmission[]): WhoSaidCandidate[] {
+  return analyzeWhoSaidCandidates(submissions).ready;
 }
 
 export function findWhoSaidCandidate(submissions: EventSubmission[], answerId: string) {

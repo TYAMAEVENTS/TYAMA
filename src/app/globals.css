@@ -145,6 +145,21 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .event-launchpad__share { border-top: var(--line); }
 .event-launchpad__share > summary { min-height: 56px; display: flex; align-items: center; padding: 0 22px; font-weight: 800; cursor: pointer; }
 .event-launchpad__share > .share-tools { border: 0; border-top: var(--line); }
+.event-prepare { margin: 26px 0; border: 3px solid var(--ink); background: var(--acid); }
+.event-prepare > header { display: grid; grid-template-columns: 1fr minmax(260px, .6fr); gap: 24px; align-items: end; padding: 24px; border-bottom: var(--line); }
+.event-prepare > header h2 { margin: 0; font-size: clamp(2rem, 5vw, 4.6rem); }
+.event-prepare > header p { margin: 0; }
+.event-readiness { display: grid; gap: 20px; padding: 24px; }
+.event-readiness__summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.event-readiness__summary strong { display: grid; font-family: var(--font-display); font-size: clamp(2rem, 5vw, 4rem); line-height: .9; }
+.event-readiness__summary small { margin-top: 8px; font-family: inherit; font-size: 12px; text-transform: uppercase; }
+.event-readiness__inventory { display: grid; grid-template-columns: repeat(3, 1fr); border: var(--line); background: var(--paper); }
+.event-readiness__inventory article { display: grid; gap: 6px; padding: 18px; border-right: var(--line); }
+.event-readiness__inventory article:last-child { border-right: 0; }
+.event-readiness__inventory span { font-size: 11px; font-weight: 900; letter-spacing: .06em; }
+.event-readiness__inventory b { font-size: 1.15rem; }
+.event-readiness__inventory small { color: var(--muted); }
+.event-readiness > .button { min-height: 64px; width: 100%; font-size: 1.05rem; }
 .section-heading--compact { margin-top: 0; }
 
 .questionnaire-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(310px, .45fr); gap: 26px; align-items: start; }
@@ -468,6 +483,9 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
   .live-autoplay .inline-actions, .live-autoplay .status { grid-column: 1; }
   .backup-grid { grid-template-columns: 1fr; }
   .event-launchpad > header, .event-launchpad__steps { grid-template-columns: 1fr; }
+  .event-prepare > header, .event-readiness__summary, .event-readiness__inventory { grid-template-columns: 1fr; }
+  .event-readiness__inventory article { border-right: 0; border-bottom: var(--line); }
+  .event-readiness__inventory article:last-child { border-bottom: 0; }
   .event-launchpad__steps article { border-right: 0; border-bottom: var(--line); }
   .event-launchpad__steps article:last-child { border-bottom: 0; }
   .workspace-grid--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }

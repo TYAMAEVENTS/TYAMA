@@ -13,5 +13,5 @@ export function WhoSaidHostPanel({ eventId, item, submissions, liveControls = fa
   const answerId = item.source_refs.find((ref) => ref.type === "answer")?.id;
   const candidate = answerId ? findWhoSaidCandidate(submissions, answerId) : null;
   if (!candidate) return <p className="status">Ця відповідь більше не доступна після модерації.</p>;
-  return <section className="who-said-host-panel"><span className="eyebrow">ХТО ЦЕ СКАЗАВ?</span><blockquote>«{candidate.quote}»</blockquote><p>{candidate.selfieAssetId ? "Селфі готове до показу після відкриття автора." : "Без фото"}</p>{liveControls ? <form action={revealWhoSaidAuthorAction.bind(null, eventId, item.id)}><button className="button button--brand button--solid" type="submit">Показати автора</button></form> : <small>Ім’я та селфі приховані до явної дії ведучого.</small>}</section>;
+  return <section className="who-said-host-panel"><span className="eyebrow">ХТО ЦЕ СКАЗАВ?</span><blockquote>«{candidate.quote}»</blockquote><p>Селфі готове до показу після відкриття автора.</p>{liveControls ? <form action={revealWhoSaidAuthorAction.bind(null, eventId, item.id)}><button className="button button--brand button--solid" type="submit">Показати автора</button></form> : <small>Ім’я та селфі приховані до явної дії ведучого.</small>}</section>;
 }

@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { getAccessToken, requireUser } from "@/lib/auth/session";
 import { getEvent } from "@/lib/events/data";
 import { buildSmartEventKitDrafts } from "@/lib/event-kit/draft-builder";
+import { analyzeEventReadiness, type EventReadiness } from "@/lib/event-kit/readiness";
+import { reconcileGeneratedItems } from "@/lib/event-kit/reconcile";
 import { buildFamilyFeudAnalyses, findFamilyFeudAnalysis, replaceFamilyFeudBoardSlot } from "@/lib/event-kit/family-feud";
 import { EVENT_KIT_TYPES, type EventKitItem, type EventKitType } from "@/lib/event-kit/types";
 import { listEventSubmissions } from "@/lib/responses/data";
@@ -32,8 +34,10 @@ export type MediaEventKitState = {
 export type BuildEventKitState = {
   success?: boolean;
   created?: number;
-  skipped?: number;
+  updated?: number;
+  unchanged?: number;
   lowPotential?: number;
+  readiness?: EventReadiness;
   error?: string;
 };
 
@@ -89,14 +93,10 @@ export async function buildEventKitDraftsAction(
   void _previousState;
   const { user, accessToken } = await hostContext(eventId);
   try {
-    const [submissions, existing, last] = await Promise.all([
+    const [submissions, existing] = await Promise.all([
       listEventSubmissions(eventId),
-      supabaseRest<Array<Pick<EventKitItem, "data">>>(
-        `event_kit_items?select=data&event_id=eq.${eventId}`,
-        { accessToken },
-      ),
-      supabaseRest<Array<Pick<EventKitItem, "sort_order">>>(
-        `event_kit_items?select=sort_order&event_id=eq.${eventId}&order=sort_order.desc&limit=1`,
+      supabaseRest<EventKitItem[]>(
+        `event_kit_items?select=*&event_id=eq.${eventId}&order=sort_order.asc,created_at.asc`,
         { accessToken },
       ),
     ]);
@@ -106,42 +106,34 @@ export async function buildEventKitDraftsAction(
       : submissions;
     const lowPotential = buildFamilyFeudAnalyses(selectedSubmissions).filter((candidate) => candidate.lowPotential).length;
     const drafts = buildSmartEventKitDrafts(selectedSubmissions);
-    if (!drafts.length) return { error: lowPotential
-      ? `LOW GAME POTENTIAL: ${lowPotential} питань поки не мають щонайменше 4 змістовних відповідей і 4 різних груп.`
-      : "Поки немає достатньо безпечних відповідей для інтерактиву. Підозрілі відповіді лишилися в черзі перевірки." };
-    const existingKeys = new Set(existing.flatMap((item) => typeof item.data.generator_key === "string" ? [item.data.generator_key] : []));
-    const missing = drafts.filter((draft) => !existingKeys.has(draft.generatorKey));
-    if (missing.length) {
-      const publicMediaIds = missing.flatMap((draft) => draft.sourceRefs.filter((ref) => ref.type === "media_asset").map((ref) => ref.id));
-      if (publicMediaIds.length) {
-        await supabaseRest(`media_assets?event_id=eq.${eventId}&id=in.(${publicMediaIds.join(",")})`, {
-          method: "PATCH",
-          accessToken,
-          body: JSON.stringify({ moderation_status: "approved", privacy_status: "public_allowed" }),
-        });
-      }
-      const firstSortOrder = (last[0]?.sort_order ?? 0) + 10;
+    const reconciliation = reconcileGeneratedItems(existing, drafts);
+    if (reconciliation.creates.length) {
       await supabaseRest("event_kit_items", {
         method: "POST",
         accessToken,
-        body: JSON.stringify(missing.map((draft, index) => ({
+        body: JSON.stringify(reconciliation.creates.map((draft) => ({
           host_id: user.id,
           event_id: eventId,
           source_type: "rules",
           item_type: draft.itemType,
           title: draft.title,
           content: draft.content,
-          data: { ...draft.data, generator_key: draft.generatorKey },
+          data: { ...draft.data, generator_key: draft.generatorKey, readiness: "ready", readiness_reason: null },
           source_refs: draft.sourceRefs,
           status: "approved",
           privacy_status: "public_allowed",
           is_useful: true,
-          sort_order: firstSortOrder + index * 10,
+          sort_order: draft.sortOrder,
         }))),
       });
     }
+    for (const update of reconciliation.updates) await supabaseRest(`event_kit_items?id=eq.${update.id}&event_id=eq.${eventId}&source_type=eq.rules`, { method: "PATCH", accessToken, body: JSON.stringify(update.patch) });
+    const readiness = analyzeEventReadiness(submissions);
+    revalidatePath(`/events/${eventId}`);
     revalidatePath(`/events/${eventId}/event-kit`);
-    return { success: true, created: missing.length, skipped: drafts.length - missing.length, lowPotential };
+    revalidatePath(`/events/${eventId}/rehearsal`);
+    revalidatePath(`/events/${eventId}/live`);
+    return { success: true, created: reconciliation.creates.length, updated: reconciliation.updates.length, unchanged: reconciliation.unchanged, lowPotential, readiness };
   } catch {
     return { error: "Не вдалося зібрати чернетки. Raw answers і ручний Event Kit залишилися без змін." };
   }
@@ -197,7 +189,7 @@ export async function replaceFamilyFeudBoardSlotAction(eventId: string, itemId: 
   const analysis = findFamilyFeudAnalysis(submissions, String(item.data.prompt ?? ""), sourceIds);
   const group = analysis?.groups.find((candidate) => candidate.key === groupKey);
   if (!group) return;
-  const data = replaceFamilyFeudBoardSlot(item.data, Number(slotIndex), group);
+  const data = { ...replaceFamilyFeudBoardSlot(item.data, Number(slotIndex), group), host_curated: true };
   await supabaseRest(`event_kit_items?id=eq.${itemId}&event_id=eq.${eventId}`, {
     method: "PATCH",
     accessToken,

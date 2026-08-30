@@ -11,6 +11,8 @@ import { formatEventDate } from "@/lib/format";
 import { listQuestionnaires } from "@/lib/questionnaires/data";
 import { publicQuestionnaireUrl } from "@/lib/questionnaires/tokens";
 import { listEventSubmissions } from "@/lib/responses/data";
+import { analyzeEventReadiness } from "@/lib/event-kit/readiness";
+import { EventKitSmartBuilder } from "@/components/event-kit-smart-builder";
 
 export const metadata: Metadata = { title: "Робочий простір події" };
 
@@ -37,6 +39,7 @@ export default async function EventWorkspacePage({ params }: { params: Promise<{
   const publishedGuest = [...guestQuestionnaires].reverse().find((questionnaire) => questionnaire.status === "published");
   const latestGuest = guestQuestionnaires.at(-1);
   const readyKitItems = kitItems.filter((item) => (item.status === "approved" || item.status === "used") && item.privacy_status === "public_allowed" && !item.do_not_use);
+  const readiness = analyzeEventReadiness(submissions);
 
   return (
     <AppShell>
@@ -51,6 +54,8 @@ export default async function EventWorkspacePage({ params }: { params: Promise<{
         </div>
         <div className="event-hero__tools"><div className="event-hero__signal"><span />КОНТЕКСТ<br />ЗБИРАЄТЬСЯ</div><Link className="button button--neutral button--outline" href={`/events/${event.id}/settings`}>Налаштування</Link></div>
       </header>
+
+      <section className="event-prepare" aria-labelledby="prepare-title"><header><div><span className="eyebrow">ГОТОВНІСТЬ КОНТЕНТУ</span><h2 id="prepare-title">Підготувати подію</h2></div><p>ТЯМА збере лише готові й дозволені матеріали. Те, чого бракує, залишиться у «Потребує уваги».</p></header><EventKitSmartBuilder eventId={eventId} readiness={readiness} primary /></section>
 
       <section className="event-launchpad" aria-labelledby="launchpad-title">
         <header><div><span className="eyebrow">ШВИДКИЙ СТАРТ</span><h2 id="launchpad-title">Що потрібно зараз?</h2></div><p>Три кроки ведучого: дати гостям QR, переглянути відповіді, запустити підготовлений матеріал.</p></header>
