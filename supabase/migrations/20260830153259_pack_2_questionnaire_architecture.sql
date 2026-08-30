@@ -89,6 +89,7 @@ create policy host_revision_access on public.questionnaire_revisions for all to 
 create policy host_revision_question_access on public.questionnaire_revision_questions for all to authenticated using ((select auth.uid())=host_id) with check ((select auth.uid())=host_id);
 create policy host_draft_read on public.public_submission_drafts for select to authenticated using ((select auth.uid())=host_id);
 create policy host_receipt_read on public.questionnaire_mutation_receipts for select to authenticated using (exists(select 1 from public.questionnaires q where q.id=questionnaire_id and q.host_id=(select auth.uid())));
+create policy host_receipt_insert on public.questionnaire_mutation_receipts for insert to authenticated with check (exists(select 1 from public.questionnaires q where q.id=questionnaire_id and q.host_id=(select auth.uid())));
 
 create or replace function private.pack2_validate_settings(p_type text,p_settings jsonb)
 returns boolean language plpgsql immutable set search_path='' as $$
