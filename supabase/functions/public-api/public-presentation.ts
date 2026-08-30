@@ -4,7 +4,9 @@ const text = (value: unknown) => typeof value === "string" && value.length ? val
 const object = (value: unknown) => value && typeof value === "object" && !Array.isArray(value) ? value as Payload : {};
 const stageAllowed = (stage: string, allowed: string[]) => allowed.includes(stage);
 
-export function sanitizePublicPresentation(raw: unknown) {
+export type SanitizedPresentation = { kind: string; session_mode?: string; item_type?: string; title?: string; content?: string; data?: Payload };
+
+export function sanitizePublicPresentation(raw: unknown): SanitizedPresentation {
   const payload = object(raw);
   const source = object(payload.data);
   const itemType = text(payload.item_type) ?? "";
@@ -67,4 +69,3 @@ export function sanitizePublicPresentation(raw: unknown) {
     ...(text(payload.session_mode) ? { session_mode: text(payload.session_mode) } : {}),
   };
 }
-

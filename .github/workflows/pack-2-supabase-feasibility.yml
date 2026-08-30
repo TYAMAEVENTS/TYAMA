@@ -63,6 +63,11 @@ jobs:
           rollback;
           SQL
 
+      - name: Execute PACK 2 synthetic high-risk acceptance
+        env:
+          PGURL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: psql "$PGURL" -f supabase/tests/pack2_acceptance.sql
+
       - name: Confirm local Storage
         run: |
           curl --fail --silent --show-error --retry 10 --retry-delay 2             http://127.0.0.1:54321/storage/v1/status
@@ -78,6 +83,14 @@ jobs:
           done
           cat /tmp/ci-edge.log
           exit 1
+
+      - name: Check PACK 2 application and contracts
+        run: |
+          npm ci
+          npm run typecheck
+          npm run lint
+          node --experimental-strip-types --test tests/*.test.ts
+          npm run build
 
       - name: Stop isolated Supabase
         if: always()

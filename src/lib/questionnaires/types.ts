@@ -11,7 +11,9 @@ export type Questionnaire = {
   audience: QuestionnaireAudience;
   title: string;
   description: string | null;
-  status: "draft" | "published" | "closed";
+  status: "draft" | "published" | "paused" | "closed";
+  published_revision_id: string | null;
+  draft_revision_id: string | null;
   public_token_hash: string | null;
   allow_images: boolean;
   allow_video: boolean;

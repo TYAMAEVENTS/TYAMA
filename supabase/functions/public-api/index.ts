@@ -40,31 +40,85 @@ Deno.serve(async (request: Request) => {
     if (!/^[0-9a-f]{64}$/.test(tokenHash)) return json(null, 404);
     const { data: questionnaire, error } = await admin
       .from("questionnaires")
-      .select("id,event_id,host_id,title,description,audience,allow_images,allow_video,allow_audio")
+      .select("id,event_id,host_id,title,description,audience,status,published_revision_id,allow_images,allow_video,allow_audio")
       .eq("public_token_hash", tokenHash)
       .eq("status", "published")
       .maybeSingle();
     if (error) return json({ error: "Request failed" }, 500);
     if (!questionnaire) return json(null, 404);
-    const { data: questions, error: questionsError } = await admin
-      .from("questions")
-      .select("id,type,prompt,help_text,is_required,sort_order,settings")
-      .eq("questionnaire_id", questionnaire.id)
-      .eq("event_id", questionnaire.event_id)
-      .eq("host_id", questionnaire.host_id)
+    const { data: memberships, error: questionsError } = await admin
+      .from("questionnaire_revision_questions")
+      .select("sort_order,is_required,questions!inner(id,type,prompt,help_text,settings)")
+      .eq("revision_id", questionnaire.published_revision_id)
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
     if (questionsError) return json({ error: "Request failed" }, 500);
+    const { data: revision } = await admin.from("questionnaire_revisions").select("id,source_set_hash,policy_version").eq("id", questionnaire.published_revision_id).single();
+    const questions = (memberships ?? []).map((membership) => {
+      const question = membership.questions as unknown as { id: string; type: string; prompt: string; help_text?: string | null; settings?: JsonObject };
+      const settings = question.settings ?? {};
+      const constraints = settings.media_constraints && typeof settings.media_constraints === "object" ? settings.media_constraints as JsonObject : {};
+      return {
+        id: question.id,
+        type: question.type,
+        prompt: question.prompt,
+        help_text: question.help_text ?? null,
+        is_required: membership.is_required,
+        sort_order: membership.sort_order,
+        input_config: {
+          options: Array.isArray(settings.options) ? settings.options : undefined,
+          allowed_kinds: Array.isArray(constraints.allowed_kinds) ? constraints.allowed_kinds : undefined,
+          max_files: typeof constraints.max_files === "number" ? constraints.max_files : undefined,
+          multiple: typeof constraints.max_files === "number" ? constraints.max_files > 1 : undefined,
+          capture: typeof constraints.capture === "string" ? constraints.capture : undefined,
+          consent_copy: "Я погоджуюся на використання дозволених відповідей і фото лише в межах цієї події.",
+          consent_version: "pack2-consent-v1",
+        },
+      };
+    });
     return json({
       id: questionnaire.id,
+      revision_id: revision?.id,
+      source_set_hash: revision?.source_set_hash,
+      policy_version: revision?.policy_version,
       title: questionnaire.title,
       description: questionnaire.description,
       audience: questionnaire.audience,
       allow_images: questionnaire.allow_images,
       allow_video: questionnaire.allow_video,
       allow_audio: questionnaire.allow_audio,
-      questions: questions ?? [],
+      collection_state: questionnaire.status,
+      questions,
     });
+  }
+
+  if (action === "begin_submission_draft") {
+    const tokenHash = String(body.token_hash ?? "");
+    const idempotencyHash = String(body.idempotency_hash ?? "");
+    const draftCapabilityHash = String(body.draft_capability_hash ?? "");
+    const displayName = String(body.display_name ?? "").trim().slice(0, 160);
+    if (![tokenHash, idempotencyHash, draftCapabilityHash].every((value) => /^[0-9a-f]{64}$/.test(value)) || !displayName) return json({ error: "Invalid request" }, 400);
+    const { data, error } = await admin.rpc("begin_public_submission_draft", { p_token_hash: tokenHash, p_idempotency_hash: idempotencyHash, p_capability_hash: draftCapabilityHash, p_display_name: displayName });
+    if (error) return json({ error: "Draft unavailable" }, 400);
+    return json(data, 201);
+  }
+
+  if (action === "save_submission_draft") {
+    const draftCapabilityHash = String(body.draft_capability_hash ?? "");
+    if (!/^[0-9a-f]{64}$/.test(draftCapabilityHash) || !Array.isArray(body.answers)) return json({ error: "Invalid request" }, 400);
+    const { error } = await admin.rpc("save_public_submission_draft", { p_capability_hash: draftCapabilityHash, p_answers: body.answers });
+    if (error) return json({ error: "Draft rejected" }, 400);
+    return json({ saved: true });
+  }
+
+  if (action === "finalize_submission_draft") {
+    const draftCapabilityHash = String(body.draft_capability_hash ?? "");
+    const sourceSetHash = String(body.source_set_hash ?? "");
+    const consentVersion = String(body.consent_version ?? "");
+    if (!/^[0-9a-f]{64}$/.test(draftCapabilityHash) || !/^[0-9a-f]{64}$/.test(sourceSetHash) || !consentVersion) return json({ error: "Invalid request" }, 400);
+    const { data, error } = await admin.rpc("finalize_public_submission_draft", { p_capability_hash: draftCapabilityHash, p_consent: body.consent === true, p_consent_version: consentVersion, p_source_set_hash: sourceSetHash });
+    if (error) return json({ error: "Finalization rejected" }, 400);
+    return json(data);
   }
 
   if (action === "submit_questionnaire") {
@@ -105,14 +159,14 @@ Deno.serve(async (request: Request) => {
       || !Number.isSafeInteger(sizeBytes)
     ) return json({ error: "Invalid media request" }, 400);
 
-    const { data: prepared, error: prepareError } = await admin.rpc("prepare_media_upload", {
-      p_questionnaire_token_hash: tokenHash,
-      p_submission_capability_hash: submissionCapabilityHash,
+    let { data: prepared, error: prepareError } = await admin.rpc("prepare_public_draft_media_upload", {
+      p_capability_hash: submissionCapabilityHash,
       p_question_id: questionId,
       p_original_filename: originalFilename,
       p_mime_type: mimeType,
       p_size_bytes: sizeBytes,
     });
+    if (prepareError) ({ data: prepared, error: prepareError } = await admin.rpc("prepare_media_upload", { p_questionnaire_token_hash: tokenHash, p_submission_capability_hash: submissionCapabilityHash, p_question_id: questionId, p_original_filename: originalFilename, p_mime_type: mimeType, p_size_bytes: sizeBytes }));
     if (prepareError || !prepared || typeof prepared !== "object") {
       return json({ error: "Media upload rejected" }, 400);
     }
@@ -169,12 +223,13 @@ Deno.serve(async (request: Request) => {
       return json({ error: "Upload is not complete" }, 409);
     }
 
-    const { data: accepted, error: completeError } = await admin.rpc("complete_media_upload", {
-      p_submission_capability_hash: submissionCapabilityHash,
+    let { data: accepted, error: completeError } = await admin.rpc("complete_public_draft_media_upload", {
+      p_capability_hash: submissionCapabilityHash,
       p_asset_id: assetId,
       p_actual_size_bytes: actualSize,
       p_actual_mime_type: actualMime,
     });
+    if (completeError) ({ data: accepted, error: completeError } = await admin.rpc("complete_media_upload", { p_submission_capability_hash: submissionCapabilityHash, p_asset_id: assetId, p_actual_size_bytes: actualSize, p_actual_mime_type: actualMime }));
     if (completeError) return json({ error: "Media upload rejected" }, 400);
     if (!accepted) {
       await admin.storage.from("event-media").remove([asset.storage_path]);

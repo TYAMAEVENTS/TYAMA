@@ -7,10 +7,12 @@ import { getEvent } from "@/lib/events/data";
 import { listEventSubmissions } from "@/lib/responses/data";
 import { supabaseRest } from "@/lib/supabase/rest";
 import { capabilityHash, questionnaireToken } from "@/lib/questionnaires/tokens";
+import { customerPreset, guestBalancedPreset, customQuestionSettings } from "@/lib/questionnaires/catalog";
 import {
   QUESTIONNAIRE_AUDIENCES,
   QUESTION_TYPES,
   type QuestionnaireAudience,
+  type Questionnaire,
   type Question,
   type QuestionType,
 } from "@/lib/questionnaires/types";
@@ -123,7 +125,7 @@ export async function createQuestionnaireAction(
     const starterKey = audience === "guest" || audience === "other" ? "guest" : "customer";
     const buildMode = String(formData.get("guestBuildMode") ?? "host_brief");
     const hostBrief = String(formData.get("hostBrief") ?? "").trim().slice(0, 4000);
-    let starter = STARTERS[starterKey];
+    const starter: StarterQuestion[] = starterKey === "guest" ? guestBalancedPreset(event.event_type) : customerPreset(event.event_type);
     let sourceDescription: string | null = null;
     if (starterKey === "guest") {
       let signal = `${event.title} ${event.client_name ?? ""} ${event.event_type} ${hostBrief}`;
@@ -141,14 +143,7 @@ export async function createQuestionnaireAction(
           ? "Guest-анкета сформована з приватного брифу ведучого та даних події. Бриф не публікується; перевірте питання перед публікацією."
           : "Повна базова guest-анкета сформована з даних події. Додайте або змініть питання перед публікацією.";
       }
-      const mediaQuestion = STARTERS.guest.find((question) => question.type === "media");
-      const textQuestions = STARTERS.guest.filter((question) => question.type !== "media");
-      starter = [
-        ...textQuestions,
-        whoSaidQuestion(event.event_type),
-        ...contextualGuestQuestions(signal),
-        ...(mediaQuestion ? [mediaQuestion] : []),
-      ];
+      void signal;
     }
     const questions = starter.map((question, index) => ({
       ...question,
@@ -203,7 +198,7 @@ export async function updateQuestionnaireAction(eventId: string, questionnaireId
   revalidatePath(pathFor(eventId, questionnaireId));
 }
 
-export async function setQuestionnaireStatusAction(eventId: string, questionnaireId: string, status: "published" | "closed" | "draft") {
+export async function setQuestionnaireStatusAction(eventId: string, questionnaireId: string, status: "published" | "paused" | "closed" | "draft", formData?: FormData) {
   const { accessToken } = await hostContext(eventId);
   if (status === "published") {
     const active = await supabaseRest<Question[]>(
@@ -211,6 +206,18 @@ export async function setQuestionnaireStatusAction(eventId: string, questionnair
       { accessToken },
     );
     if (!active.length) redirect(`${pathFor(eventId, questionnaireId)}?error=no-active-questions`);
+    if (formData?.get("authorizePublicSources") !== "on") redirect(`${pathFor(eventId, questionnaireId)}?error=public-source-authorization-required`);
+    const questionnaires = await supabaseRest<Question[]>(`questionnaires?select=id,published_revision_id,draft_revision_id&id=eq.${questionnaireId}&event_id=eq.${eventId}&limit=1`, { accessToken }) as unknown as Array<{ published_revision_id: string | null; draft_revision_id: string | null }>;
+    const questionnaire = questionnaires[0];
+    if (!questionnaire?.draft_revision_id) redirect(`${pathFor(eventId, questionnaireId)}?error=no-draft-revision`);
+    const revisions = await supabaseRest<Array<{ id: string; row_version: number }>>(`questionnaire_revisions?select=id,row_version&id=eq.${questionnaire.draft_revision_id}&limit=1`, { accessToken });
+    const draft = revisions[0];
+    if (!draft) redirect(`${pathFor(eventId, questionnaireId)}?error=no-draft-revision`);
+    const authorization = await supabaseRest<{ row_version: number }>("rpc/authorize_questionnaire_sources_tx", { method: "POST", accessToken, body: JSON.stringify({ p_questionnaire_id: questionnaireId, p_draft_revision_id: draft.id, p_expected_row_version: draft.row_version, p_idempotency_key: crypto.randomUUID(), p_policy_version: "pack2-v1" }) });
+    await supabaseRest("rpc/publish_questionnaire_revision_tx", { method: "POST", accessToken, body: JSON.stringify({ p_questionnaire_id: questionnaireId, p_expected_published_revision_id: questionnaire.published_revision_id, p_draft_revision_id: draft.id, p_expected_row_version: authorization.row_version, p_idempotency_key: crypto.randomUUID() }) });
+    revalidatePath(pathFor(eventId, questionnaireId));
+    revalidatePath(pathFor(eventId));
+    return;
   }
   await supabaseRest(`questionnaires?id=eq.${questionnaireId}&event_id=eq.${eventId}`, {
     method: "PATCH",
@@ -224,29 +231,23 @@ export async function setQuestionnaireStatusAction(eventId: string, questionnair
 export type AddQuestionState = { success?: boolean; error?: string };
 
 export async function addQuestionAction(eventId: string, questionnaireId: string, _state: AddQuestionState, formData: FormData): Promise<AddQuestionState> {
-  const { user, accessToken } = await hostContext(eventId);
+  const { accessToken } = await hostContext(eventId);
   const typeValue = String(formData.get("type") ?? "short_text");
   const type = QUESTION_TYPES.includes(typeValue as QuestionType) ? (typeValue as QuestionType) : "short_text";
   const prompt = String(formData.get("prompt") ?? "").trim().slice(0, 1000);
   if (!prompt) return { error: "Додайте текст питання." };
-  const current = await supabaseRest<Array<Pick<Question, "sort_order">>>(
-    `questions?select=sort_order&questionnaire_id=eq.${questionnaireId}&event_id=eq.${eventId}&order=sort_order.desc&limit=1`,
-    { accessToken },
-  );
-  await supabaseRest("questions", {
-    method: "POST",
-    accessToken,
-    body: JSON.stringify({
-      host_id: user.id,
-      event_id: eventId,
-      questionnaire_id: questionnaireId,
-      type,
-      prompt,
-      is_required: type !== "media" && formData.get("isRequired") === "on",
-      sort_order: (current[0]?.sort_order ?? 0) + 10,
-      default_privacy: "review_required",
-    }),
-  });
+  const questionnaires = await supabaseRest<Questionnaire[]>(`questionnaires?select=*&id=eq.${questionnaireId}&event_id=eq.${eventId}&limit=1`, { accessToken });
+  const questionnaire = questionnaires[0];
+  if (!questionnaire) return { error: "Анкету не знайдено." };
+  let draftRevisionId = questionnaire.draft_revision_id;
+  if (!draftRevisionId && questionnaire.published_revision_id) {
+    const published = await supabaseRest<Array<{ row_version: number }>>(`questionnaire_revisions?select=row_version&id=eq.${questionnaire.published_revision_id}`, { accessToken });
+    const ensured = await supabaseRest<{ draft_revision_id: string }>("rpc/ensure_questionnaire_draft_tx", { method: "POST", accessToken, body: JSON.stringify({ p_questionnaire_id: questionnaireId, p_expected_published_revision_id: questionnaire.published_revision_id, p_expected_row_version: published[0]?.row_version, p_idempotency_key: crypto.randomUUID() }) });
+    draftRevisionId = ensured.draft_revision_id;
+  }
+  if (!draftRevisionId) return { error: "Чернетку версії не знайдено." };
+  const draft = await supabaseRest<Array<{ row_version: number }>>(`questionnaire_revisions?select=row_version&id=eq.${draftRevisionId}`, { accessToken });
+  await supabaseRest("rpc/add_draft_question_tx", { method: "POST", accessToken, body: JSON.stringify({ p_questionnaire_id: questionnaireId, p_draft_revision_id: draftRevisionId, p_expected_row_version: draft[0]?.row_version, p_idempotency_key: crypto.randomUUID(), p_type: type, p_prompt: prompt, p_is_required: type !== "media" && formData.get("isRequired") === "on", p_settings: customQuestionSettings() }) });
   return { success: true };
 }
 
@@ -255,6 +256,23 @@ export async function updateQuestionAction(eventId: string, questionnaireId: str
   const prompt = String(formData.get("prompt") ?? "").trim().slice(0, 1000);
   const type = String(formData.get("type") ?? "short_text");
   if (!prompt) redirect(`${pathFor(eventId, questionnaireId)}?error=question-prompt`);
+  const questionnaires = await supabaseRest<Questionnaire[]>(`questionnaires?select=*&id=eq.${questionnaireId}&event_id=eq.${eventId}&limit=1`, { accessToken });
+  const questionnaire = questionnaires[0];
+  if (questionnaire?.published_revision_id) {
+    const published = await supabaseRest<Array<{ row_version: number }>>(`questionnaire_revisions?select=row_version&id=eq.${questionnaire.published_revision_id}&limit=1`, { accessToken });
+    let draftRevisionId = questionnaire.draft_revision_id;
+    if (!draftRevisionId) {
+      const ensured = await supabaseRest<{ draft_revision_id: string }>("rpc/ensure_questionnaire_draft_tx", { method: "POST", accessToken, body: JSON.stringify({ p_questionnaire_id: questionnaireId, p_expected_published_revision_id: questionnaire.published_revision_id, p_expected_row_version: published[0]?.row_version, p_idempotency_key: crypto.randomUUID() }) });
+      draftRevisionId = ensured.draft_revision_id;
+    }
+    const [draft, current] = await Promise.all([
+      supabaseRest<Array<{ row_version: number }>>(`questionnaire_revisions?select=row_version&id=eq.${draftRevisionId}&limit=1`, { accessToken }),
+      supabaseRest<Question[]>(`questions?select=*&id=eq.${questionId}&questionnaire_id=eq.${questionnaireId}&event_id=eq.${eventId}&limit=1`, { accessToken }),
+    ]);
+    await supabaseRest("rpc/update_draft_question_tx", { method: "POST", accessToken, body: JSON.stringify({ p_questionnaire_id: questionnaireId, p_draft_revision_id: draftRevisionId, p_question_id: questionId, p_expected_row_version: draft[0]?.row_version, p_idempotency_key: crypto.randomUUID(), p_prompt: prompt, p_help_text: String(formData.get("helpText") ?? "").trim().slice(0, 500), p_is_required: type !== "media" && formData.get("isRequired") === "on", p_is_active: formData.get("isActive") === "on", p_settings: current[0]?.settings ?? customQuestionSettings() }) });
+    revalidatePath(pathFor(eventId, questionnaireId));
+    return;
+  }
   await supabaseRest(`questions?id=eq.${questionId}&questionnaire_id=eq.${questionnaireId}&event_id=eq.${eventId}`, {
     method: "PATCH",
     accessToken,

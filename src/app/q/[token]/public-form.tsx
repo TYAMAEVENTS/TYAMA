@@ -13,6 +13,7 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
   const [state, action, pending] = useActionState(submitPublicQuestionnaireAction.bind(null, token), initialState);
   const [selectedMedia, setSelectedMedia] = useState<Record<string, File[]>>({});
   const [mediaError, setMediaError] = useState<string>();
+  const [publicUseConsent, setPublicUseConsent] = useState(false);
   const [submissionKey, setSubmissionKey] = useState(idempotencyKey);
   const [draftStatus, setDraftStatus] = useState<"restored" | "saved" | undefined>();
   const [guestStep, setGuestStep] = useState(0);
@@ -157,7 +158,10 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
   }
 
   if (state.success) {
-    return mediaFiles.length ? <PublicMediaUploader token={token} idempotencyKey={submissionKey} files={mediaFiles} /> : <section className="public-success"><span className="public-success__mark">✓</span><h2>Збіглося.</h2><p>Відповіді вже у Свята. Їх ніхто не побачить публічно без його перевірки.</p></section>;
+    return <section className="public-success"><span className="public-success__mark">✓</span><h2>Збіглося.</h2><p>Відповіді й вибрані файли надіслано ведучому.</p></section>;
+  }
+  if (state.draftReady && state.draftCapability && state.sourceSetHash && state.consentVersion) {
+    return <PublicMediaUploader token={token} idempotencyKey={submissionKey} files={mediaFiles} draftCapability={state.draftCapability} sourceSetHash={state.sourceSetHash} consentVersion={state.consentVersion} consent={publicUseConsent} />;
   }
   return (
     <form ref={formRef} action={action} className={`public-form ${isGuestFlow ? "public-form--steps" : ""}`} onInput={saveDraft} onChange={saveDraft} noValidate>
@@ -176,12 +180,13 @@ export function PublicQuestionnaireForm({ questionnaire, token, idempotencyKey }
           {question.type === "long_text" ? <textarea className="resize-none" id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} /> : null}
           {question.type === "short_text" ? <input id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} /> : null}
           {question.type === "boolean" ? <select id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required}><option value="">Оберіть</option><option value="yes">Так</option><option value="no">Ні</option></select> : null}
-          {(question.type === "single_select" || question.type === "multi_select") ? <select id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} multiple={question.type === "multi_select"}>{question.type === "single_select" ? <option value="">Оберіть</option> : null}{(question.settings.options ?? []).map((option) => <option value={option} key={option}>{option}</option>)}</select> : null}
-          {question.type === "media" ? <input id={`answer-${question.id}`} type="file" accept={acceptedMedia} multiple onChange={(event) => selectFiles(question.id, event.currentTarget.files)} /> : null}
+          {(question.type === "single_select" || question.type === "multi_select") ? <select id={`answer-${question.id}`} name={`answer:${question.id}`} required={question.is_required} multiple={question.type === "multi_select"}>{question.type === "single_select" ? <option value="">Оберіть</option> : null}{(question.input_config.options ?? []).map((option) => <option value={option} key={option}>{option}</option>)}</select> : null}
+          {question.type === "media" ? <><input type="hidden" name={`hasMedia:${question.id}`} value={(selectedMedia[question.id] ?? []).length ? "true" : "false"} /><input id={`answer-${question.id}`} type="file" accept={(question.input_config.allowed_kinds ?? []).flatMap((kind) => kind === "image" ? ["image/jpeg", "image/png", "image/webp"] : kind === "video" ? ["video/mp4", "video/webm", "video/quicktime"] : ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"]).join(",") || acceptedMedia} multiple={question.input_config.multiple} capture={question.input_config.capture as "user" | "environment" | undefined} onChange={(event) => selectFiles(question.id, event.currentTarget.files)} /></> : null}
         </div>
       ))}
       {mediaError ? <StatusMessage tone="error">{mediaError}</StatusMessage> : null}
       {stepError ? <StatusMessage tone="error">{stepError}</StatusMessage> : null}
+      <label className="checkbox-field"><input type="checkbox" name="publicUseConsent" checked={publicUseConsent} onChange={(event) => setPublicUseConsent(event.currentTarget.checked)} /> Я погоджуюся на використання дозволених відповідей і фото лише в межах цієї події. Без згоди матеріали залишаться на перевірці ведучого.</label>
       {isGuestFlow ? (
         <div className="guest-step-actions">
           <button className="button button--neutral button--outline" type="button" onClick={goBack} disabled={guestStep === 0 || pending}>Назад</button>

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   try {
     const completed = await supabaseEdge<{ asset_id: string; status: "ready" }>({
       action: "complete_media_upload",
-      submission_capability_hash: capabilityHash(`${token}:${idempotencyKey}`),
+      submission_capability_hash: capabilityHash(`${token}:${idempotencyKey}:draft`),
       asset_id: assetId,
     });
     return NextResponse.json(completed, { headers: { "Cache-Control": "no-store" } });

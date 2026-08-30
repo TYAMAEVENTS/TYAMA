@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status";
 
@@ -21,13 +21,22 @@ export function PublicMediaUploader({
   token,
   idempotencyKey,
   files,
+  draftCapability,
+  sourceSetHash,
+  consentVersion,
+  consent,
 }: {
   token: string;
   idempotencyKey: string;
   files: SelectedMediaFile[];
+  draftCapability: string;
+  sourceSetHash: string;
+  consentVersion: string;
+  consent: boolean;
 }) {
   const [states, setStates] = useState<UploadState[]>(() => files.map(() => "queued"));
   const [busy, setBusy] = useState(false);
+  const [finalized, setFinalized] = useState(false);
   const preparedUploads = useRef<Array<PreparedUpload | undefined>>([]);
   const uploadedFiles = useRef<boolean[]>([]);
   const readyCount = states.filter((state) => state === "ready").length;
@@ -84,18 +93,31 @@ export function PublicMediaUploader({
       }
       setStates([...nextStates]);
     }
+    if (nextStates.every((state) => state === "ready")) {
+      await responseJson(await fetch("/api/public-submission/finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draftCapability, sourceSetHash, consentVersion, consent }) }));
+      setFinalized(true);
+    }
     setBusy(false);
   }
 
-  if (readyCount === files.length) {
-    return <StatusMessage tone="success">Усі файли завантажено. Вони приватні, доки Свят не перевірить їх вручну.</StatusMessage>;
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void uploadAll();
+  // The upload bundle is intentionally started once after the single submit action.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (finalized && readyCount === files.length) {
+    return <StatusMessage tone="success">Відповіді й усі файли надіслано ведучому.</StatusMessage>;
   }
 
   return (
     <section className="public-media-upload" aria-labelledby="media-upload-title">
-      <span className="eyebrow">КРОК 02 / МЕДІА</span>
-      <h2 id="media-upload-title">Відповіді вже збережено. Додамо файли?</h2>
-      <p>Не закривайте сторінку до завершення. Кожен файл потрапить у приватне сховище й не з’явиться на екрані автоматично.</p>
+      <span className="eyebrow">НАДСИЛАННЯ</span>
+      <h2 id="media-upload-title">Завантажуємо вибрані файли…</h2>
+      <p>Це частина одного надсилання. Не закривайте сторінку до фінального підтвердження.</p>
       {errorCount ? <StatusMessage tone="error">{errorCount} файл(и) не завантажились. Натисніть кнопку ще раз — готові файли не дублюються.</StatusMessage> : null}
       <ul className="public-media-list">
         {files.map((selected, index) => (
@@ -105,7 +127,7 @@ export function PublicMediaUploader({
           </li>
         ))}
       </ul>
-      <Button type="button" busy={busy} onClick={uploadAll}>Завантажити {files.length} файл(и) →</Button>
+      {errorCount ? <Button type="button" busy={busy} onClick={uploadAll}>Повторити невдалі файли →</Button> : null}
     </section>
   );
 }

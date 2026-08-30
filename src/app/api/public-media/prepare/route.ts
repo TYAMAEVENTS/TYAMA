@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const prepared = await supabaseEdge<PreparedUpload>({
       action: "prepare_media_upload",
       token_hash: capabilityHash(token),
-      submission_capability_hash: capabilityHash(`${token}:${idempotencyKey}`),
+      submission_capability_hash: capabilityHash(`${token}:${idempotencyKey}:draft`),
       question_id: questionId,
       original_filename: filename,
       mime_type: mimeType,

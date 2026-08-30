@@ -22,6 +22,8 @@ const ERRORS: Record<string, string> = {
   title: "Додайте назву анкети.",
   "no-active-questions": "Для публікації потрібне хоча б одне активне питання.",
   "question-prompt": "Текст питання не може бути порожнім.",
+  "public-source-authorization-required": "Підтвердьте автоматичні публічні джерела для цієї версії.",
+  "no-draft-revision": "Немає готової чернетки для публікації.",
 };
 
 export default async function QuestionnaireEditorPage({
@@ -41,6 +43,11 @@ export default async function QuestionnaireEditorPage({
   ]);
   if (!event || !questionnaire) notFound();
   const publicUrl = publicQuestionnaireUrl(questionnaire.id);
+  const automaticQuestions = questions.filter((question) => question.settings.public_source_policy === "automatic_with_consent");
+  const whoSaid = automaticQuestions.filter((question) => question.settings.content_intents?.includes("who_said"));
+  const familyFeud = automaticQuestions.filter((question) => question.settings.content_intents?.includes("family_feud"));
+  const stories = automaticQuestions.filter((question) => question.settings.content_intents?.includes("story"));
+  const media = automaticQuestions.filter((question) => question.type === "media");
 
   return (
     <AppShell>
@@ -71,9 +78,8 @@ export default async function QuestionnaireEditorPage({
           <p>{questionnaire.status === "published" ? "Посилання активне. Нові відповіді приймаються." : questionnaire.status === "closed" ? "Анкета закрита. Наявні відповіді збережено." : "Анкету бачить лише ведучий."}</p>
           {questionnaire.status === "published" ? <ShareTools url={publicUrl} /> : null}
           <div className="inline-actions">
-            {questionnaire.status !== "published" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "published")} noValidate><button className="button button--brand button--solid" type="submit">Опублікувати</button></form> : null}
-            {questionnaire.status === "published" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "closed")} noValidate><button className="button button--neutral button--outline" type="submit">Закрити прийом</button></form> : null}
-            {questionnaire.status === "closed" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "draft")} noValidate><button className="button button--neutral button--outline" type="submit">Повернути в чернетку</button></form> : null}
+            {questionnaire.status !== "published" && questionnaire.status !== "closed" ? <form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "published")} className="editor-form" noValidate><div className="status"><strong>Автоматичні джерела цієї версії</strong><p>«Хто це сказав?» — {whoSaid.length} поля; «100 зі 100» — {familyFeud.length}; історії — {stories.length}; медіа — {media.length}. Автоматично дозволяються лише catalog-джерела зі згодою гостя та після safety rules.</p></div><label className="checkbox-field"><input type="checkbox" name="authorizePublicSources" required /> Я дозволяю ТЯМІ автоматично підготувати публічні кандидати з цих джерел лише за наявності згоди гостя та проходження safety rules.</label><button className="button button--brand button--solid" type="submit">Опублікувати версію</button></form> : null}
+            {questionnaire.status === "published" ? <><form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "paused")} noValidate><button className="button button--neutral button--outline" type="submit">Призупинити</button></form><form action={setQuestionnaireStatusAction.bind(null, eventId, questionnaireId, "closed")} noValidate><button className="button button--neutral button--outline" type="submit">Закрити прийом</button></form></> : null}
           </div>
         </div>
       </section>
