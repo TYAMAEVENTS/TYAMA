@@ -110,19 +110,19 @@ end $$;
 alter table public.questions add constraint questions_pack2_settings_valid check (private.pack2_validate_settings(type,settings)) not valid;
 
 do $$
-declare q public.questionnaires%rowtype; r_id uuid; v integer;
+declare questionnaire_record public.questionnaires%rowtype; r_id uuid; v integer;
 begin
-  for q in select * from public.questionnaires order by created_at,id loop
-    if q.published_revision_id is not null or q.draft_revision_id is not null then continue; end if;
+  for questionnaire_record in select * from public.questionnaires order by created_at,id loop
+    if questionnaire_record.published_revision_id is not null or questionnaire_record.draft_revision_id is not null then continue; end if;
     v:=1;
     insert into public.questionnaire_revisions(questionnaire_id,event_id,host_id,version,state,published_at)
-    values(q.id,q.event_id,q.host_id,v,case when q.status='published' then 'published' else 'draft' end,case when q.status='published' then q.updated_at end)
+    values(questionnaire_record.id,questionnaire_record.event_id,questionnaire_record.host_id,v,case when questionnaire_record.status='published' then 'published' else 'draft' end,case when questionnaire_record.status='published' then questionnaire_record.updated_at end)
     returning id into r_id;
     insert into public.questionnaire_revision_questions(revision_id,questionnaire_id,event_id,host_id,question_id,sort_order,is_required,is_active)
-    select r_id,q.id,q.event_id,q.host_id,x.id,x.sort_order,x.is_required,x.is_active from public.questions x where x.questionnaire_id=q.id;
-    if q.status='published' then update public.questionnaires set published_revision_id=r_id where id=q.id; else update public.questionnaires set draft_revision_id=r_id where id=q.id; end if;
+    select r_id,questionnaire_record.id,questionnaire_record.event_id,questionnaire_record.host_id,x.id,x.sort_order,x.is_required,x.is_active from public.questions x where x.questionnaire_id=questionnaire_record.id;
+    if questionnaire_record.status='published' then update public.questionnaires set published_revision_id=r_id where id=questionnaire_record.id; else update public.questionnaires set draft_revision_id=r_id where id=questionnaire_record.id; end if;
   end loop;
-  update public.submissions s set questionnaire_revision_id=q.published_revision_id from public.questionnaires q where q.id=s.questionnaire_id and s.questionnaire_revision_id is null and q.published_revision_id is not null;
+  update public.submissions s set questionnaire_revision_id=source_questionnaire.published_revision_id from public.questionnaires source_questionnaire where source_questionnaire.id=s.questionnaire_id and s.questionnaire_revision_id is null and source_questionnaire.published_revision_id is not null;
 end $$;
 
 create or replace function private.reject_published_question_mutation() returns trigger language plpgsql set search_path='' as $$
