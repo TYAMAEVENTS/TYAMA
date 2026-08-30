@@ -23,11 +23,15 @@ import { AUDIENCE_LABELS } from "@/lib/questionnaires/types";
 import { listEventSubmissions } from "@/lib/responses/data";
 import { QuestionnaireCreateForm } from "../questionnaire-create-form";
 import { ShareTools } from "@/components/share-tools";
+import { ShowBuilder } from "@/components/show-builder";
+import { MobileLiveConsole } from "@/components/mobile-live-console";
+import { getRehearsalState, getShowSession, getShowSet } from "@/lib/show-set/data";
 
 const SECTION_COPY: Record<string, { title: string; description: string }> = {
   questionnaires: { title: "Анкети", description: "Customer і guest questionnaires для цієї події." },
   responses: { title: "Відповіді", description: "Сирі відповіді залишаються доступними незалежно від ШІ." },
   "event-kit": { title: "Event Kit", description: "Структурований матеріал Свята, не AI-чат." },
+  "show-builder": { title: "Show Builder", description: "Готовий порядок шоу: ТЯМА готує, ведучий коригує винятки." },
   rehearsal: { title: "Репетиція", description: "Безпечна перевірка майбутнього Live без старту події." },
   live: { title: "Live Mode", description: "Поточний блок, приватна підказка і точний public state." },
   backup: { title: "Backup", description: "Battle-ready копія матеріалів перед реальною подією." },
@@ -66,6 +70,10 @@ export default async function EventSectionPage({ params, searchParams }: { param
         </section>
       </AppShell>
     );
+  }
+  if (section === "show-builder") {
+    const showSet = await getShowSet(eventId);
+    return <AppShell><nav aria-label="Навігаційний шлях" className="breadcrumbs"><Link href="/dashboard">Події</Link><span aria-hidden="true">/</span><Link href={`/events/${event.id}`}>{event.title}</Link><span aria-hidden="true">/</span><span aria-current="page">Show Builder</span></nav><ShowBuilder eventId={eventId} showSet={showSet}/></AppShell>;
   }
   if (section === "responses") {
     const submissions = await listEventSubmissions(eventId);
@@ -156,6 +164,12 @@ export default async function EventSectionPage({ params, searchParams }: { param
   }
   if (section === "rehearsal" || section === "live") {
     const requestedMode = section === "rehearsal" ? "rehearsal" : "live";
+    const [showSet, session, liveState] = await Promise.all([getShowSet(eventId),getShowSession(eventId),getHostLiveState(eventId)]);
+    const rehearsalState = session?.mode === "rehearsal" ? await getRehearsalState(session.id) : null;
+    return <AppShell><nav aria-label="Навігаційний шлях" className="breadcrumbs"><Link href="/dashboard">Події</Link><span aria-hidden="true">/</span><Link href={`/events/${event.id}`}>{event.title}</Link><span aria-hidden="true">/</span><span aria-current="page">{config.title}</span></nav><div className="page-heading"><div><span className="eyebrow">{requestedMode === "live" ? "MOBILE LIVE" : "PRIVATE REHEARSAL"}</span><h1>{config.title}</h1><p>{config.description}</p></div><Link className="button button--neutral button--outline" href={`/events/${eventId}/show-builder`}>Порядок шоу</Link></div><MobileLiveConsole eventId={eventId} mode={requestedMode} showSet={showSet} session={session} liveState={liveState} rehearsalState={rehearsalState}/></AppShell>;
+  }
+  if (false && (section === "rehearsal" || section === "live")) {
+    const requestedMode = section === "rehearsal" ? "rehearsal" : "live";
     const [items, session, liveState, submissions] = await Promise.all([listEventKitItems(eventId), getActiveLiveSession(eventId), getHostLiveState(eventId), listEventSubmissions(eventId)]);
     const candidates = items.filter((item) => (item.status === "approved" || item.status === "used") && item.privacy_status === "public_allowed" && !item.do_not_use && (item.item_type === "interactive" || item.item_type === "media"));
     const slideshowCandidates = candidates.filter((item) => item.item_type === "media");
@@ -163,9 +177,9 @@ export default async function EventSectionPage({ params, searchParams }: { param
     const sessionMatches = session?.mode === requestedMode;
     return (
       <AppShell>
-        <nav aria-label="Навігаційний шлях" className="breadcrumbs"><Link href="/dashboard">Події</Link><span aria-hidden="true">/</span><Link href={`/events/${event.id}`}>{event.title}</Link><span aria-hidden="true">/</span><span aria-current="page">{config.title}</span></nav>
+        <nav aria-label="Навігаційний шлях" className="breadcrumbs"><Link href="/dashboard">Події</Link><span aria-hidden="true">/</span><Link href={`/events/${event!.id}`}>{event!.title}</Link><span aria-hidden="true">/</span><span aria-current="page">{config.title}</span></nav>
         <div className="page-heading"><div><span className="eyebrow">{requestedMode === "live" ? "BATTLE MODE" : "SAFE PREVIEW"}</span><h1>{config.title}</h1><p>{config.description}</p></div>{sessionMatches ? <Link href={screenUrl} target="_blank" className="button button--neutral button--outline">Відкрити Public Screen ↗</Link> : null}</div>
-        {!sessionMatches ? <section className="live-start"><span className="live-start__signal" /><h2>{session ? `Зараз активна сесія: ${session.mode}.` : requestedMode === "live" ? "Готові починати?" : "Перевіримо все без ризику."}</h2><p>{requestedMode === "live" ? "Після старту Public Screen отримає лише явно показані схвалені блоки." : "Репетиція використовує той самий sanitized public pipeline, але чітко позначена як тест."}</p><form action={startLiveSessionAction.bind(null, eventId, requestedMode)} noValidate><button className="button button--brand button--solid" type="submit">{session ? `Перемкнути на ${requestedMode}` : `Почати ${requestedMode}`}</button></form></section> : <section className="live-console">
+        {!sessionMatches ? <section className="live-start"><span className="live-start__signal" /><h2>{session ? `Зараз активна сесія: ${session?.mode}.` : requestedMode === "live" ? "Готові починати?" : "Перевіримо все без ризику."}</h2><p>{requestedMode === "live" ? "Після старту Public Screen отримає лише явно показані схвалені блоки." : "Репетиція використовує той самий sanitized public pipeline, але чітко позначена як тест."}</p><form action={startLiveSessionAction.bind(null, eventId, requestedMode)} noValidate><button className="button button--brand button--solid" type="submit">{session ? `Перемкнути на ${requestedMode}` : `Почати ${requestedMode}`}</button></form></section> : <section className="live-console">
           <aside className="live-current"><span className="eyebrow">ЗАРАЗ НА ЕКРАНІ / REV {liveState?.revision ?? 0}</span><div className="live-current__preview"><span>{liveState?.mode || "idle"}</span><h2>{liveState?.public_payload.title || "Екран очищено"}</h2><p>{liveState?.public_payload.content || "Public Screen тримає нейтральний brand state."}</p></div><div className="live-current__controls"><form action={clearPublicScreenAction.bind(null, eventId)} noValidate><button className="button button--neutral button--outline" type="submit">Очистити екран</button></form><form action={endLiveSessionAction.bind(null, eventId)} noValidate><button className="button button--danger button--solid" type="submit">Завершити сесію</button></form></div><ShareTools url={screenUrl} label="Public Screen" showQr={false} /></aside>
           <div className="live-candidates"><LiveAutoplay eventId={eventId} candidates={slideshowCandidates.map((item) => ({ id: item.id, title: item.title || "Без назви" }))} /><div className="section-heading"><div><span className="eyebrow">ГОТОВО ДО ПОКАЗУ / {String(candidates.length).padStart(2, "0")}</span><h2>Інтерактиви й слайдшоу</h2></div></div>{candidates.length ? candidates.map((item, index) => <article className="live-item" key={item.id}><span className="live-item__index">{String(index + 1).padStart(2, "0")}</span><div><span className="eyebrow">{item.item_type === "interactive" ? String(item.data.interactive_kind || "Інтерактив") : "Слайдшоу"}</span><h3>{item.title || "Без назви"}</h3><p>{item.content}</p></div><div className="live-item__actions"><form action={showInteractiveIntroAction.bind(null, eventId, item.id)} noValidate><button className="button button--neutral button--outline" type="submit">Заставка</button></form><form action={startInteractiveAction.bind(null, eventId, item.id)} noValidate><button className="button button--brand button--solid" type="submit">Почати</button></form>{item.item_type === "interactive" ? <>{item.data.generator !== "family_feud_v4" && item.data.generator !== "who_said_v3" ? <form action={revealInteractiveAction.bind(null, eventId, item.id)} noValidate><button className="button button--neutral button--outline" type="submit">Відкрити відповідь</button></form> : null}{item.data.interactive_kind === "dilettantes" ? <form action={spinDilettantesWheelAction.bind(null, eventId, item.id)} noValidate><button className="button button--neutral button--outline" type="submit">Крутити колесо</button></form> : null}</> : <form action={advanceSlideshowAction.bind(null, eventId, item.id)} noValidate><button className="button button--neutral button--outline" type="submit">Наступний файл</button></form>}</div><FamilyFeudHostPanel eventId={eventId} item={item} submissions={submissions} liveControls /><WhoSaidHostPanel eventId={eventId} item={item} submissions={submissions} liveControls /></article>) : <div className="status">Ще немає готових інтерактивів або слайдшоу. Зберіть їх із відповідей у два натискання.</div>}</div>
         </section>}

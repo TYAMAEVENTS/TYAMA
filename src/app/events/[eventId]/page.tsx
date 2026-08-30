@@ -20,9 +20,10 @@ const sections = [
   ["01", "Анкети", "Customer + guest, публічні посилання і QR", "questionnaires"],
   ["02", "Відповіді", "Raw context, люди, файли та модерація", "responses"],
   ["03", "Event Kit", "Відібрані історії, питання й інтерактиви", "event-kit"],
-  ["04", "Репетиція", "Перевірка порядку й Public Screen", "rehearsal"],
-  ["05", "Live Mode", "Показати, далі, очистити — без метушні", "live"],
-  ["06", "Backup", "CSV, JSON, друк і критичні медіа", "backup"],
+  ["04", "Show Builder", "Підготовлений порядок, винятки й ревізія запуску", "show-builder"],
+  ["05", "Репетиція", "Приватна перевірка без Public Screen", "rehearsal"],
+  ["06", "Live Mode", "Мобільний пульт для ведучого", "live"],
+  ["07", "Backup", "CSV, JSON, друк і критичні медіа", "backup"],
 ] as const;
 
 export default async function EventWorkspacePage({ params }: { params: Promise<{ eventId: string }> }) {

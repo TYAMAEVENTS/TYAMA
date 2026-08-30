@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - pack-2-ci-feasibility
+      - pack-3-show-builder-mobile-live
 
 permissions:
   contents: read
@@ -68,6 +69,11 @@ jobs:
           PGURL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: psql "$PGURL" -f supabase/tests/pack2_acceptance.sql
 
+      - name: Execute PACK 3 nine-case focused acceptance
+        env:
+          PGURL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: psql "$PGURL" -f supabase/tests/pack3_acceptance.sql
+
       - name: Confirm local Storage
         run: |
           curl --fail --silent --show-error --retry 10 --retry-delay 2             http://127.0.0.1:54321/storage/v1/status
@@ -91,6 +97,16 @@ jobs:
           npm run lint
           node --experimental-strip-types --test tests/*.test.ts
           npm run build
+
+      - name: Confirm PACK 3 app routing
+        run: |
+          npm start > /tmp/pack3-next.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login | grep -q 'ТЯМА'; then break; fi
+            sleep 2
+          done
+          curl --fail --silent --show-error --location http://127.0.0.1:3000/events/21000000-0000-4000-8000-000000000001/show-builder | grep -q 'Вхід'
+          curl --fail --silent --show-error --location http://127.0.0.1:3000/events/21000000-0000-4000-8000-000000000001/live | grep -q 'Вхід'
 
       - name: Stop isolated Supabase
         if: always()
